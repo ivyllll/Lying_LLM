@@ -1,0 +1,35 @@
+# Python 编译和缓存
+__pycache__/
+*.py[cod]
+
+# Jupyter notebook 检查点
+.ipynb_checkpoints/
+
+# 虚拟环境
+env/
+.venv/
+venv/
+ENV/
+
+# 数据和模型文件
+*.csv
+*.json
+*.npz
+*.pkl
+*.pt
+*.ckpt
+*.h5
+
+# 输出目录
+runs/
+logs/
+outputs/
+checkpoints/
+wandb/
+*.log
+
+# IDE 和系统文件
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
