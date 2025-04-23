@@ -2,7 +2,7 @@
 
 4/22;
 Fetch the activations of all specific topics based on three prompts (honest, neurtral, deceptive)
-Run step1 to examine the probing accuracy on several topics
+Run **step1** to examine the probing accuracy on several topics
 ## 🔍 Project Summary: Probing and Visualizing Internal Representations of LLaMA
 
 ### 🔗 Function Call Overview
