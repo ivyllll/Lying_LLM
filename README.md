@@ -22,7 +22,7 @@ main()
 │   └── Load chat_probe_accuracies_layerwise.pkl → generate line plot → save as PNG
 │
 ├── for layer in range(0, 32):
-│   └── visualize_latent_space(...)       # Project and plot activations at a fixed layer (12)
+│   └── visualize_latent_space(...)       # Project and plot activations at a fixed layer (13/15/32)
 │       └── collect_training_data(...)    # Load activations
 │       └── t-SNE / UMAP / PCA / Isomap → save 2D plots as PNG
 │
@@ -60,7 +60,7 @@ main()
 │   └── 读取 chat_probe_accuracies_layerwise.pkl 进行绘图并保存 PNG
 │
 ├── for layer in range(0, 32):
-│   └── visualize_latent_space(...)       # 在给定层 (12) 对激活值进行缩线成 2D 进行可视化
+│   └── visualize_latent_space(...)       # 在给定层 (13/15/32) 对激活值进行缩线成 2D 进行可视化
 │       └── collect_training_data(...)    # 读取数据
 │       └── t-SNE / UMAP / PCA / Isomap 进行降维绘图
 │
