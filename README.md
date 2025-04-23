@@ -1,11 +1,13 @@
 # Lying_LLM
 
 4/22;
+
 Fetch the activations of all specific topics based on three prompts (honest, neurtral, deceptive)
 
 Run **step1** to examine the probing accuracy on several topics
 
 4/23；
+
 Continue to run **step1** for deceptive and neutral prompts
 
 
