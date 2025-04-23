@@ -26,13 +26,14 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False  # Turn off to ensure deterministic behavior
 
 
+
 def visualize_layerwise_probe_accuracy():
     # LLaMA3.1-8B-Chat
 
     layer_num = 32
     # Dummy data for LLaMA-7B
     layers = np.arange(1, layer_num + 1)
-    filename = "probe_accuracies_layerwise.pkl"
+    filename = "chat_probe_accuracies_layerwise.pkl"
     with open(filename, "rb") as f:
         probe_accuracies_layerwise = pickle.load(f)
 
@@ -76,9 +77,9 @@ def visualize_layerwise_probe_accuracy():
     ax.legend()
     ax.grid(True)
 
-    # Display the plot
+    # save the img
     plt.tight_layout()
-    plt.show()
+    plt.savefig("layerwise_probe_accuracy.png")
 
 
 ## probe on topic-specific datasets
@@ -125,7 +126,7 @@ def run_step1(train_sets, train_set_sizes, model_family,
                                               model_size=model_size,
                                               model_type=model_type,
                                               layer=layer,
-                                              base_dir="acts_truthful_prompt",
+                                              base_dir="acts/acts_deceptive_prompt",
                                               device=device)
                     print("=> acts_centered.size(): {}\nacts.size(): {}"
                           "\nlabels.size(): {}\npolarities.size(): {}"
@@ -148,7 +149,7 @@ def run_step1(train_sets, train_set_sizes, model_family,
 
 
                     # Evaluate classification accuracy on held out datasets
-                    dm = DataManager(base_dir="acts_truthful_prompt")
+                    dm = DataManager(base_dir="acts/acts_deceptive_prompt")
                     for j in range(0, 2):
                         dm.add_dataset(train_sets[i + j], model_family,
                                     model_size, model_type, layer,
@@ -180,7 +181,7 @@ def run_step1(train_sets, train_set_sizes, model_family,
 
 
 def visualize_latent_space(train_sets, train_set_sizes, model_family,
-                           model_size, model_type, layer):
+                           model_size, model_type, layer, base_dir):
     ## load training data
     """
        from utils import collect_training_data
@@ -197,7 +198,8 @@ def visualize_latent_space(train_sets, train_set_sizes, model_family,
                               model_family=model_family,
                               model_size=model_size,
                               model_type=model_type,
-                              layer=layer)
+                              layer=layer,
+                              base_dir=base_dir)
     print("=> acts_centered.size(): {}\nacts.size(): {}"
           "\nlabels.size(): {}\npolarities.size():{}"
           .format(acts_centered.size(), acts.size(),
@@ -232,7 +234,8 @@ def visualize_latent_space(train_sets, train_set_sizes, model_family,
     plt.xlabel('t-SNE Component 1')
     plt.ylabel('t-SNE Component 2')
     plt.grid(True)
-    plt.show()
+    plt.savefig("experimental_outputs/deceptive/Llama3.1/8B/chat/tsne_layer32.png")
+
 
     # --- UMAP Visualization ---
     reducer = umap.UMAP(n_neighbors=30, min_dist=0.1, random_state=42)
@@ -245,7 +248,8 @@ def visualize_latent_space(train_sets, train_set_sizes, model_family,
     plt.xlabel('UMAP Component 1')
     plt.ylabel('UMAP Component 2')
     plt.grid(True)
-    plt.show()
+    plt.savefig("experimental_outputs/deceptive/Llama3.1/8B/chat/umap_layer32.png")
+
 
     # --- PCA Visualization ---
     pca = PCA(n_components=2)
@@ -258,7 +262,8 @@ def visualize_latent_space(train_sets, train_set_sizes, model_family,
     plt.xlabel('Principal Component 1')
     plt.ylabel('Principal Component 2')
     plt.grid(True)
-    plt.show()
+    plt.savefig("experimental_outputs/deceptive/Llama3.1/8B/chat/pca_layer32.png")
+
 
     # --- Isomap Visualization ---
     isomap = Isomap(n_neighbors=10, n_components=2)
@@ -271,7 +276,8 @@ def visualize_latent_space(train_sets, train_set_sizes, model_family,
     plt.xlabel('Isomap Component 1')
     plt.ylabel('Isomap Component 2')
     plt.grid(True)
-    plt.show()
+    plt.savefig("experimental_outputs/deceptive/Llama3.1/8B/chat/isomap_layer32.png")
+
 
 
 def run_step2(train_sets, train_set_sizes, model_family,
@@ -404,15 +410,17 @@ def main():
                 pickle.dump(probe_accuracies_layerwise, f)
         print("\n=>=> Finish running the step 1!\n")
 
-    visualize_layerwise_probe_accuracy()
+    # visualize_layerwise_probe_accuracy()
 
     for layer in range(0, layer_num):
         print("\n=> Visualizing layer {}...".format(layer))
-        layer = 12
+        # ---------------------------- force to visualize layer 13/15/32 ----------------------------
+        layer = 31  
         visualize_latent_space(train_sets=train_sets,
                                train_set_sizes=train_set_sizes,
                                model_family=model_family, model_size=model_size,
-                               model_type=model_type, layer=layer)
+                               model_type=model_type, layer=layer,
+                               base_dir="acts/acts_deceptive_prompt")
         exit(-1)
 
 
