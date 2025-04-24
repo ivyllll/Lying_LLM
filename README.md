@@ -15,6 +15,7 @@ Get the pkl file for all three prompts, containing the average accuracies and th
 Run **step2**:
 
 **====Truthful====**
+
 =>=> TTPD:
 => Mean Accuracy: 79.99%
 => Standard Deviation of the mean accuracy: 0.42%
@@ -24,7 +25,8 @@ Run **step2**:
 => Mean Accuracy: 78.12%
 => Standard Deviation of the mean accuracy: 2.76%
 
-**====Deceptive====**
+**====Deceptive====**  
+
 =>=> TTPD:
 => Mean Accuracy: 80.36%
 => Standard Deviation of the mean accuracy: 0.14%
