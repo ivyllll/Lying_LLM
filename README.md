@@ -6,7 +6,7 @@ Fetch the activations of all specific topics based on three prompts (honest, neu
 
 Run **step1** to examine the probing accuracy on several topics (on truthful prompt).
 
-4/23；
+4/23;
 
 Continue to run **step1** for deceptive and neutral prompts.
 
