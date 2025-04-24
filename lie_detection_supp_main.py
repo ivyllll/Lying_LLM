@@ -2,7 +2,7 @@ import umap
 import torch
 import random
 import pickle
-
+import os
 import numpy as np
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -15,7 +15,9 @@ from probes import TTPD, LRProbe
 from utils import (DataManager, dataset_sizes, collect_training_data,
                    compute_statistics, compute_average_accuracies)
 
-
+# -----------------------------------------------------------------------------
+#                        Globals & Re‑usable helpers
+# -----------------------------------------------------------------------------
 seed = 1000
 random.seed(seed)
 np.random.seed(seed)
@@ -25,70 +27,38 @@ torch.cuda.manual_seed_all(seed)  # If using multi-GPU
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False  # Turn off to ensure deterministic behavior
 
+# Where to read activations  & where to write results/figures -----------------
+PROMPT2ACTS_DIR = {
+    "truthful": "acts/acts_truthful_prompt",
+    "deceptive": "acts/acts_deceptive_prompt",
+    "neutral": "acts/acts_neutral_prompt",
+}
+def make_output_path(prompt_type: str, model_family: str, model_size: str, model_type: str, fname: str) -> str:
+    """Return an output file path and make sure the directory exists."""
+    root = os.path.join("experimental_outputs", prompt_type, model_family, model_size, model_type)
+    os.makedirs(root, exist_ok=True)
+    return os.path.join(root, fname)
 
-
-def visualize_layerwise_probe_accuracy():
-    # LLaMA3.1-8B-Chat
-
-    layer_num = 32
-    # Dummy data for LLaMA-7B
-    layers = np.arange(1, layer_num + 1)
-    filename = "chat_probe_accuracies_layerwise.pkl"
-    with open(filename, "rb") as f:
-        probe_accuracies_layerwise = pickle.load(f)
-
-    print(len(probe_accuracies_layerwise))
-    print(probe_accuracies_layerwise)
-    TTPD_layerwise_probe_accuracy = []
-    LR_layerwise_probe_accuracy = []
-    for layer_i_probe in probe_accuracies_layerwise:
-        TTPD_layerwise_probe_accuracy.append(layer_i_probe['TTPD']['mean'])
-        LR_layerwise_probe_accuracy.append(layer_i_probe['LRProbe']['mean'])
-
-
-    # Colors matching the original plot
-    TTPD_color = '#c6dcab'  # light green for option1
-    LR_color = '#add8e6'  # light blue for option2
-
-    # Common y-axis limits and ticks
-    y_min, y_max = 0.4, 1.0
-    y_ticks = np.arange(y_min, y_max + 0.2, 0.2)
-
-    # Create the figure
-    fig, ax = plt.subplots(figsize=(8, 5))
-
-
-    # Plotting
-    ax.plot(layers, TTPD_layerwise_probe_accuracy, color=TTPD_color,
-            label='TTPD', linewidth=2, marker='o')
-    ax.plot(layers, LR_layerwise_probe_accuracy, color=LR_color,
-            label='LR', linewidth=2, marker='s')
-
-    # Title and labels
-    ax.set_title('LLaMA3.1-8B-Instruct', fontsize=14)
-    ax.set_xlabel('Layer Index', fontsize=12)
-    ax.set_ylabel('Probing Accuracy', fontsize=12)
-
-    # Set y-axis limits and ticks
-    ax.set_ylim(y_min, y_max)
-    ax.set_yticks(y_ticks)
-
-    # Add legend and grid
-    ax.legend()
-    ax.grid(True)
-
-    # save the img
-    plt.tight_layout()
-    plt.savefig("layerwise_probe_accuracy.png")
-
-
-## probe on topic-specific datasets
-def run_step1(train_sets, train_set_sizes, model_family,
-              model_size, model_type, layer, device):
+# -----------------------------------------------------------------------------
+#                   STEP 1: probe on topic-specific datasets
+# -----------------------------------------------------------------------------
+def run_step1(
+        *,
+        train_sets: list[str], 
+        train_set_sizes: dict[str, int],
+        model_family: str,
+        model_size: str,
+        model_type: str,
+        layer: int,
+        device: str,
+        prompt_type: str = "truthful",
+):
     # compare TTPD and LR on topic-specific datasets
+    acts_dir = PROMPT2ACTS_DIR[prompt_type]
+
     """from probes import TTPD, LRProbe"""
     probe_types = [TTPD, LRProbe]
-    results = {TTPD: defaultdict(list),
+    results:dict = {TTPD: defaultdict(list),
                LRProbe: defaultdict(list)}
     num_iter = 20
 
@@ -99,7 +69,7 @@ def run_step1(train_sets, train_set_sizes, model_family,
         """from probes import CCSProbe, TTPD, LRProbe, MMProbe"""
         for probe_type in probe_types:
             for n in range(num_iter):
-                indices = np.arange(0, 12, 2)
+                indices = np.arange(0, len(train_sets), 2)
                 for i in indices:
                     """
                        Get a new NumPy array with the specified
@@ -126,12 +96,12 @@ def run_step1(train_sets, train_set_sizes, model_family,
                                               model_size=model_size,
                                               model_type=model_type,
                                               layer=layer,
-                                              base_dir="acts/acts_deceptive_prompt",
+                                              base_dir=acts_dir,
                                               device=device)
-                    print("=> acts_centered.size(): {}\nacts.size(): {}"
-                          "\nlabels.size(): {}\npolarities.size(): {}"
-                          .format(acts_centered.size(), acts.size(),
-                                  labels.size(), polarities.size()))
+                    # print("=> acts_centered.size(): {}\nacts.size(): {}"
+                    #       "\nlabels.size(): {}\npolarities.size(): {}"
+                    #       .format(acts_centered.size(), acts.size(),
+                    #               labels.size(), polarities.size()))
                     if probe_type == TTPD:
                         """from probes import TTPD"""
                         probe = TTPD.from_data(acts_centered=acts_centered,  # acts_centered [656, 4096]
@@ -149,7 +119,7 @@ def run_step1(train_sets, train_set_sizes, model_family,
 
 
                     # Evaluate classification accuracy on held out datasets
-                    dm = DataManager(base_dir="acts/acts_deceptive_prompt")
+                    dm = DataManager(base_dir=acts_dir)
                     for j in range(0, 2):
                         dm.add_dataset(train_sets[i + j], model_family,
                                     model_size, model_type, layer,
@@ -179,119 +149,29 @@ def run_step1(train_sets, train_set_sizes, model_family,
 
     return probe_accuracies
 
-
-def visualize_latent_space(train_sets, train_set_sizes, model_family,
-                           model_size, model_type, layer, base_dir):
-    ## load training data
-    """
-       from utils import collect_training_data
-    polarity = -1.0 if 'neg_' in dataset_name else 1.0
-    - acts_centered: torch.Size([1640, 4096]), abstract by
-    mean
-    - acts: torch.Size([1640, 4096])
-    - labels: torch.Size([1640])
-    - polarities: torch.Size([1640])
-    """
-    acts_centered, acts, labels, polarities = \
-        collect_training_data(dataset_names=np.array(train_sets),
-                              train_set_sizes=train_set_sizes,
-                              model_family=model_family,
-                              model_size=model_size,
-                              model_type=model_type,
-                              layer=layer,
-                              base_dir=base_dir)
-    print("=> acts_centered.size(): {}\nacts.size(): {}"
-          "\nlabels.size(): {}\npolarities.size():{}"
-          .format(acts_centered.size(), acts.size(),
-                  labels.size(), polarities.size()))
-    print(torch.min(acts), torch.max(acts))
-    print(labels)
-
-    # Assume your data is provided as PyTorch tensors
-    # acts: torch.Size([1968, 4096]), labels: torch.Size([1968])
-    # Example placeholder (replace with your actual data):
-    # acts = torch.randn(1968, 4096)
-    # labels = torch.randint(0, 2, (1968,))
-
-    acts_np = acts.cpu().numpy()
-    labels_np = labels.cpu().numpy()
-
-    """ Normalize data (Standardization)
-       Scales each feature to have:
-    Mean = 0, Standard deviation = 1.
-    """
-    scaler = StandardScaler()
-    acts_normalized = scaler.fit_transform(acts_np)
-
-    # --- t-SNE Visualization ---
-    tsne = TSNE(n_components=2, perplexity=30, random_state=42)
-    acts_tsne = tsne.fit_transform(acts_normalized)
-
-    plt.figure(figsize=(8, 6))
-    plt.scatter(acts_tsne[:, 0], acts_tsne[:, 1], c=labels_np, cmap='viridis', s=10, alpha=0.7)
-    plt.colorbar(label='Label')
-    plt.title('t-SNE Visualization')
-    plt.xlabel('t-SNE Component 1')
-    plt.ylabel('t-SNE Component 2')
-    plt.grid(True)
-    plt.savefig("experimental_outputs/deceptive/Llama3.1/8B/chat/tsne_layer32.png")
-
-
-    # --- UMAP Visualization ---
-    reducer = umap.UMAP(n_neighbors=30, min_dist=0.1, random_state=42)
-    acts_umap = reducer.fit_transform(acts_normalized)
-
-    plt.figure(figsize=(8, 6))
-    plt.scatter(acts_umap[:, 0], acts_umap[:, 1], c=labels_np, cmap='viridis', s=10, alpha=0.7)
-    plt.colorbar(label='Label')
-    plt.title('UMAP Visualization')
-    plt.xlabel('UMAP Component 1')
-    plt.ylabel('UMAP Component 2')
-    plt.grid(True)
-    plt.savefig("experimental_outputs/deceptive/Llama3.1/8B/chat/umap_layer32.png")
-
-
-    # --- PCA Visualization ---
-    pca = PCA(n_components=2)
-    acts_pca = pca.fit_transform(acts_normalized)
-
-    plt.figure(figsize=(8, 6))
-    plt.scatter(acts_pca[:, 0], acts_pca[:, 1], c=labels_np, cmap='viridis', s=10, alpha=0.7)
-    plt.colorbar(label='Label')
-    plt.title('PCA Visualization')
-    plt.xlabel('Principal Component 1')
-    plt.ylabel('Principal Component 2')
-    plt.grid(True)
-    plt.savefig("experimental_outputs/deceptive/Llama3.1/8B/chat/pca_layer32.png")
-
-
-    # --- Isomap Visualization ---
-    isomap = Isomap(n_neighbors=10, n_components=2)
-    acts_isomap = isomap.fit_transform(acts_normalized)
-
-    plt.figure(figsize=(8, 6))
-    plt.scatter(acts_isomap[:, 0], acts_isomap[:, 1], c=labels_np, cmap='viridis', s=10, alpha=0.7)
-    plt.colorbar(label='Label')
-    plt.title('Isomap Visualization')
-    plt.xlabel('Isomap Component 1')
-    plt.ylabel('Isomap Component 2')
-    plt.grid(True)
-    plt.savefig("experimental_outputs/deceptive/Llama3.1/8B/chat/isomap_layer32.png")
-
-
-
-def run_step2(train_sets, train_set_sizes, model_family,
-              model_size, model_type, layer, device):
-    """
-       Generalisation to logical conjunctions and disjunctions. Compare
-    TTPD, LR, CCS and MM on logical conjunctions and disjunctions.
-    """
+# -----------------------------------------------------------------------------
+#                                STEP 2 
+# evaluate the generalization ability of probing methods 
+# on conjunction and disjunction tasks
+# -----------------------------------------------------------------------------
+def run_step2(
+        train_sets: list[str], 
+        train_set_sizes: dict[str, int],
+        model_family: str,
+        model_size: str,
+        model_type: str,
+        layer: int,
+        device: str,
+        prompt_type: str = "truthful",
+        ):
+    acts_dir = PROMPT2ACTS_DIR[prompt_type]
     val_sets = ["cities_conj", "cities_disj", "sp_en_trans_conj",
                 "sp_en_trans_disj", "inventors_conj", "inventors_disj",
                 "animal_class_conj", "animal_class_disj",
                 "element_symb_conj", "element_symb_disj", "facts_conj",
                 "facts_disj", "common_claim_true_false",
                 "counterfact_true_false"]
+    # --------------- activations for common_claim_true_false, counterfact_true_false not generated yet !!! ---------------
 
     probe_types = [TTPD, LRProbe]
     results = {TTPD: defaultdict(list),
@@ -313,6 +193,7 @@ def run_step2(train_sets, train_set_sizes, model_family,
                                           model_family=model_family,
                                           model_size=model_size,
                                           model_type=model_type,
+                                          base_dir=acts_dir,
                                           layer=layer)
                 if probe_type == TTPD:
                     """from probes import TTPD"""
@@ -329,7 +210,7 @@ def run_step2(train_sets, train_set_sizes, model_family,
                     probe = LRProbe.from_data(acts, labels)
 
                 # evaluate classification accuracy on validation datasets
-                dm = DataManager()
+                dm = DataManager(base_dir=acts_dir)
                 for val_set in val_sets:
                     dm.add_dataset(val_set, model_family, model_size,
                                    model_type, layer, split=None,
@@ -358,27 +239,136 @@ def run_step2(train_sets, train_set_sizes, model_family,
               f"{stats['std_dev'] * 100:.2f}%\n")
 
 
+# -----------------------------------------------------------------------------
+#                             Visualiser
+# -----------------------------------------------------------------------------
+def visualize_layerwise_probe_accuracy(
+        *,
+        pickle_path: str,
+        model_family: str,
+        model_size: str,
+        model_type: str,
+        prompt_type: str = "truthful",
+):
+    """Draw accuracy-vs-layer curves from a previously saved pickle file."""
+
+    layer_num = 32
+
+    layers = np.arange(1, layer_num + 1)
+    if not os.path.isfile(pickle_path):
+        pickle_path = make_output_path(prompt_type, model_family, model_size, model_type, pickle_path)
+
+    with open(pickle_path, "rb") as f:
+        probe_accuracies_layerwise = pickle.load(f)
+
+    layers = np.arange(1, len(probe_accuracies_layerwise) + 1)
+    ttpd = [d["TTPD"]["mean"] for d in probe_accuracies_layerwise]
+    lr   = [d["LRProbe"]["mean"] for d in probe_accuracies_layerwise]
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(layers, ttpd, label="TTPD", linewidth=2, marker="o", color="#c6dcab")
+    plt.plot(layers, lr,   label="LR",   linewidth=2, marker="s", color="#add8e6")
+    plt.ylim(0.4, 1.0)
+    plt.yticks(np.arange(0.4, 1.01, 0.2))
+    plt.xlabel("Layer index")
+    plt.ylabel("Probing accuracy")
+    plt.title(f"{model_family}-{model_size}-{model_type}: {prompt_type} prompts")
+    plt.grid(True)
+    plt.legend()
+
+    out_path = make_output_path(prompt_type, model_family, model_size, model_type, "layerwise_probe_accuracy.png")
+    plt.tight_layout()
+    plt.savefig(out_path)
+    plt.close()
+
+## visualize the latent space of the training data with t-SNE, UMAP, PCA, and Isomap
+def visualize_latent_space(
+        *,
+        train_sets: list[str], 
+        train_set_sizes: dict[str, int],
+        model_family: str,
+        model_size: str, 
+        model_type: str, 
+        layer: int, 
+        prompt_type: str = "truthful",
+        device: str = "cpu",
+        ):
+    acts_dir = PROMPT2ACTS_DIR[prompt_type]
+    ## load training data
+    """
+       from utils import collect_training_data
+    polarity = -1.0 if 'neg_' in dataset_name else 1.0
+    - acts_centered: torch.Size([1640, 4096]), abstract by
+    mean
+    - acts: torch.Size([1640, 4096])
+    - labels: torch.Size([1640])
+    - polarities: torch.Size([1640])
+    """
+    acts_centered, acts, labels, polarities = \
+        collect_training_data(dataset_names=np.array(train_sets),
+                              train_set_sizes=train_set_sizes,
+                              model_family=model_family,
+                              model_size=model_size,
+                              model_type=model_type,
+                              layer=layer,
+                              base_dir=acts_dir,
+                              device=device)
+    # print("=> acts_centered.size(): {}\nacts.size(): {}"
+    #       "\nlabels.size(): {}\npolarities.size():{}"
+    #       .format(acts_centered.size(), acts.size(),
+    #               labels.size(), polarities.size()))
+    # print(torch.min(acts), torch.max(acts))
+    # print(labels)
+
+    # Assume your data is provided as PyTorch tensors
+    # acts: torch.Size([1968, 4096]), labels: torch.Size([1968])
+    # Example placeholder (replace with your actual data):
+    # acts = torch.randn(1968, 4096)
+    # labels = torch.randint(0, 2, (1968,))
+
+    acts_np = StandardScaler().fit_transform(acts.cpu().numpy())
+    labels_np = labels.cpu().numpy()
+
+    reducers = {
+        "tsne": TSNE(n_components=2, perplexity=30, random_state=42),
+        "umap": umap.UMAP(n_neighbors=30, min_dist=0.1, random_state=42),
+        "pca": PCA(n_components=2),
+        "isomap": Isomap(n_neighbors=10, n_components=2),
+    }
+
+    for name, reducer in reducers.items():
+        reduced = reducer.fit_transform(acts_np)
+        plt.figure(figsize=(8, 6))
+        plt.scatter(reduced[:, 0], reduced[:, 1], c=labels_np, cmap="viridis", s=10, alpha=0.7)
+        plt.colorbar(label="Label")
+        plt.title(f"{name.upper()} - Layer {layer+1}")
+        plt.xlabel("Component 1")
+        plt.ylabel("Component 2")
+        plt.grid(True)
+        out_path = make_output_path(prompt_type, model_family, model_size, model_type, f"{name}_layer{layer+1}.png")
+        plt.savefig(out_path)
+        plt.close()
+
+
+
 def main():
     # hyperparameters
     model_family = 'Llama3.1'  # options are 'Llama3', 'Llama2', 'Gemma', 'Gemma2' or 'Mistral'
     model_size = '8B'
     model_type = 'chat'  # options are 'chat' or 'base'
     model_type_list = ['chat']
-
     layer_num = 32
-    layer = 12  # layer from which to extract activations
-    run_step = {"step1": True, "step2": False}
+    # layer = 12  # layer from which to extract activations
+    prompt_type = "neutral"
+    pickle_path = make_output_path(prompt_type, model_family, model_size, model_type, "chat_probe_accuracies_layerwise.pkl")
 
-    # gpu speeds up CCS training a fair bit but is not required
+    run_step = {"step1": False, "step2": True}
+
     device = 'cpu'
 
-    # define datasets used for training
     train_sets = ["cities", "neg_cities", "sp_en_trans", "neg_sp_en_trans", 
                   "inventors", "neg_inventors", "animal_class", "neg_animal_class", 
                   "element_symb", "neg_element_symb", "facts", "neg_facts"]
-    
-    # get size of each training dataset to include an equal
-    # number of statements from each topic in training data
     train_set_sizes = dataset_sizes(train_sets)
 
     if run_step["step1"]:
@@ -398,30 +388,47 @@ def main():
             probe_accuracies_layerwise = []
             for layer in range(0, layer_num):
                 print("\n=> For {}...".format(layer))
-                probe_accuracies = run_step1(train_sets=train_sets,
-                                             train_set_sizes=train_set_sizes,
-                                             model_family=model_family, model_size=model_size,
-                                             model_type=model_type, layer=layer, device=device)
+                probe_accuracies = run_step1(
+                    train_sets=train_sets,
+                    train_set_sizes=train_set_sizes,
+                    model_family=model_family, 
+                    model_size=model_size,
+                    model_type=model_type, 
+                    layer=layer, 
+                    device=device,
+                    prompt_type=prompt_type)
                 print("=> probe_accuracies: {}".format(probe_accuracies))
                 probe_accuracies_layerwise.append(probe_accuracies)
 
-            filename = model_type + "_probe_accuracies_layerwise.pkl"
-            with open(filename, "wb") as f:
+            with open(pickle_path, "wb") as f:
                 pickle.dump(probe_accuracies_layerwise, f)
         print("\n=>=> Finish running the step 1!\n")
 
-    # visualize_layerwise_probe_accuracy()
 
-    for layer in range(0, layer_num):
-        print("\n=> Visualizing layer {}...".format(layer))
-        # ---------------------------- force to visualize layer 13/15/32 ----------------------------
-        layer = 31  
-        visualize_latent_space(train_sets=train_sets,
-                               train_set_sizes=train_set_sizes,
-                               model_family=model_family, model_size=model_size,
-                               model_type=model_type, layer=layer,
-                               base_dir="acts/acts_deceptive_prompt")
-        exit(-1)
+    # visualize_layerwise_probe_accuracy(
+    #     pickle_path=pickle_path,
+    #     model_family=model_family,
+    #     model_size=model_size,
+    #     model_type=model_type,
+    #     prompt_type=prompt_type,
+    # )
+
+    # # for layer in range(0, layer_num):
+    # for layer in [12, 14, 31]:
+    #     print("\n=> Visualizing layer {}...".format(layer+1))
+    #     # ---------------------------- force to visualize layer 13/15/32 ----------------------------
+    #     # layer = 31  
+    #     visualize_latent_space(
+    #         train_sets=train_sets,
+    #         train_set_sizes=train_set_sizes,
+    #         model_family=model_family, 
+    #         model_size=model_size,
+    #         model_type=model_type, 
+    #         layer=layer,
+    #         prompt_type=prompt_type,
+    #         device=device,
+    #     )
+    #     # exit(-1)
 
 
 
@@ -438,9 +445,14 @@ def main():
         disjunctions.
         """
         print("\n=>=> You are running the step 2...\n")
-        run_step2(train_sets=train_sets, train_set_sizes=train_set_sizes,
-                  model_family=model_family, model_size=model_size,
-                  model_type=model_type, layer=layer, device=device)
+        run_step2(train_sets=train_sets, 
+                  train_set_sizes=train_set_sizes,
+                  model_family=model_family, 
+                  model_size=model_size,
+                  model_type=model_type, 
+                  layer=14, 
+                  device=device,
+                  prompt_type=prompt_type)
         print("\n=>=> Finish running the step 2!\n")
 
 
