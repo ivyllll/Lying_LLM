@@ -2,13 +2,15 @@
 
 4/22;
 
-Fetch the activations of all specific topics based on three prompts (honest, neurtral, deceptive)
+Fetch the activations of all specific topics based on three prompts (honest, neurtral, deceptive).
 
-Run **step1** to examine the probing accuracy on several topics
+Run **step1** to examine the probing accuracy on several topics (on truthful prompt).
 
 4/23；
 
-Continue to run **step1** for deceptive and neutral prompts
+Continue to run **step1** for deceptive and neutral prompts.
+
+Get the pkl file for all three prompts, containing the average accuracies and the standard deviations of two probing methods TTPD and LR among all layers.
 
 
 ## 🔍 Project Summary: Probing and Visualizing Internal Representations of LLaMA
