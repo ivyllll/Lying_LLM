@@ -14,51 +14,13 @@ Get the pkl file for all three prompts, containing the average accuracies and th
 
 Run **step2**:
 
-**====Truthful====**
-
-=>=> TTPD:  
-
-=> Mean Accuracy: 79.99%  
-
-=> Standard Deviation of the mean accuracy: 0.42%
-
-
-=>=> LRProbe:  
-
-=> Mean Accuracy: 78.12%
-
-=> Standard Deviation of the mean accuracy: 2.76%
-
-**====Deceptive====**  
-
-=>=> TTPD:
-
-=> Mean Accuracy: 80.36%
-
-=> Standard Deviation of the mean accuracy: 0.14%
-
-
-=>=> LRProbe:
-
-=> Mean Accuracy: 68.36%
-
-=> Standard Deviation of the mean accuracy: 5.25%
-
-**====Neutral====**  
-
-=>=> TTPD:
-
-=> Mean Accuracy: 84.88%
-
-=> Standard Deviation of the mean accuracy: 0.46%
-
-
-=>=> LRProbe:
-
-=> Mean Accuracy: 75.43%
-
-=> Standard Deviation of the mean accuracy: 4.53%
-
+Prompt Type | Probe | Mean Accuracy (%) | Std. Dev (%)
+Truthful | TTPD | 79.99 | 0.42
+ | LRProbe | 78.12 | 2.76
+Deceptive | TTPD | 80.36 | 0.14
+ | LRProbe | 68.36 | 5.25
+Neutral | TTPD | 84.88 | 0.46
+ | LRProbe | 75.43 | 4.53
 ## 🔍 Project Summary: Probing and Visualizing Internal Representations of LLaMA
 
 ### 🔗 Function Call Overview
