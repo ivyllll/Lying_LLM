@@ -1,9 +1,29 @@
 # Lying_LLM
 
 4/22;
-Fetch the activations of all specific topics based on three prompts (honest, neurtral, deceptive)
 
-Run **step1** to examine the probing accuracy on several topics
+Fetch the activations of all specific topics based on three prompts (honest, neurtral, deceptive).
+
+Run **step1** to examine the probing accuracy on several topics (on truthful prompt).
+
+4/23;
+
+Continue to run **step1** for deceptive and neutral prompts.
+
+Get the pkl file for all three prompts, containing the average accuracies and the standard deviations of two probing methods TTPD and LR among all layers.
+
+Run **step2**:
+
+| Prompt Type | Probe   | Mean Accuracy (%) | Std. Dev (%) |
+|-------------|---------|-------------------|--------------|
+| Truthful    | TTPD    | 79.99              | 0.42         |
+|             | LRProbe | 78.12              | 2.76         |
+| Deceptive   | TTPD    | 80.36              | 0.14         |
+|             | LRProbe | 68.36              | 5.25         |
+| Neutral     | TTPD    | 84.88              | 0.46         |
+|             | LRProbe | 75.43              | 4.53         |
+
+
 ## 🔍 Project Summary: Probing and Visualizing Internal Representations of LLaMA
 
 ### 🔗 Function Call Overview
