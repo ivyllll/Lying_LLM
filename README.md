@@ -36,7 +36,8 @@ Run **step2**:
 => Mean Accuracy: 68.36%
 => Standard Deviation of the mean accuracy: 5.25%
 
-**====Neutral====**
+**====Neutral====**  
+
 =>=> TTPD:
 => Mean Accuracy: 84.88%
 => Standard Deviation of the mean accuracy: 0.46%
