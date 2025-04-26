@@ -13,6 +13,7 @@ Continue to run **step1** for deceptive and neutral prompts.
 Get the pkl file for all three prompts, containing the average accuracies and the standard deviations of two probing methods TTPD and LR among all layers.
 
 Run **step2**:
+
 **layer 14:**
 | Prompt Type | Probe   | Mean Accuracy (%) | Std. Dev (%) |
 |-------------|---------|-------------------|--------------|
