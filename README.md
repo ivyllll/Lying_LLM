@@ -14,7 +14,7 @@ Get the pkl file for all three prompts, containing the average accuracies and th
 
 Run **step2**:
 
-**layer 14:**
+**layer 15:**
 | Prompt Type | Probe   | Mean Accuracy (%) | Std. Dev (%) |
 |-------------|---------|-------------------|--------------|
 | Truthful    | TTPD    | 79.99              | 0.42         |
