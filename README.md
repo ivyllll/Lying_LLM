@@ -14,6 +14,7 @@ Get the pkl file for all three prompts, containing the average accuracies and th
 
 Run **step2**:
 
+**layer 15:**
 | Prompt Type | Probe   | Mean Accuracy (%) | Std. Dev (%) |
 |-------------|---------|-------------------|--------------|
 | Truthful    | TTPD    | 79.99              | 0.42         |
@@ -23,6 +24,13 @@ Run **step2**:
 | Neutral     | TTPD    | 84.88              | 0.46         |
 |             | LRProbe | 75.43              | 4.53         |
 
+4/26；
+
+Add SAE on the collected activations to do further analysis:
+
+1. Feature Shift Analysis for truthful vs neutral / truthful vs deceptive / neutral vs deceptive
+        using Cosine Similarity, Overlap Ratio, and L2 score to evaluate the tendency through layers
+2. 
 
 ## 🔍 Project Summary: Probing and Visualizing Internal Representations of LLaMA
 
