@@ -36,7 +36,16 @@ Add SAE on the collected activations to do further analysis:
 4/27；
 
 **step2 run**
-
+Peak layer summary:
+- Truthful Prompt:
+  TTPD peak at Layer 16 with 83.62%
+  LR peak at Layer 15 with 77.15%
+- Neutral Prompt:
+  TTPD peak at Layer 15 with 85.62%
+  LR peak at Layer 20 with 76.20%
+- Deceptive Prompt:
+  TTPD peak at Layer 14 with 80.42%
+  LR peak at Layer 15 with 71.33%
 
 ## 🔍 Project Summary: Probing and Visualizing Internal Representations of LLaMA
 
