@@ -35,7 +35,7 @@ Add SAE on the collected activations to do further analysis:
 
 4/27；
 
-**step2 run **
+**step2 run**
 
 
 ## 🔍 Project Summary: Probing and Visualizing Internal Representations of LLaMA
