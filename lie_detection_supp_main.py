@@ -237,6 +237,8 @@ def run_step2(
         print(f"=> Mean Accuracy: {stats['mean'] * 100:.2f}%")
         print(f"=> Standard Deviation of the mean accuracy: "
               f"{stats['std_dev'] * 100:.2f}%\n")
+        
+    return probe_accuracies
 
 
 # -----------------------------------------------------------------------------
@@ -445,15 +447,46 @@ def main():
         disjunctions.
         """
         print("\n=>=> You are running the step 2...\n")
-        run_step2(train_sets=train_sets, 
-                  train_set_sizes=train_set_sizes,
-                  model_family=model_family, 
-                  model_size=model_size,
-                  model_type=model_type, 
-                  layer=14, 
-                  device=device,
-                  prompt_type=prompt_type)
-        print("\n=>=> Finish running the step 2!\n")
+
+        prompt_types = ["truthful", "neutral", "deceptive"]
+
+        for prompt_type in prompt_types:
+            print(f"\n=>=> Processing prompt type: {prompt_type}\n")
+            probe_accuracies_layerwise = []
+
+            for layer in range(0, layer_num):
+                print(f"Running probing on Layer {layer} for {prompt_type} prompts...")
+
+                probe_accuracies = run_step2(
+                    train_sets=train_sets,
+                    train_set_sizes=train_set_sizes,
+                    model_family=model_family,
+                    model_size=model_size,
+                    model_type=model_type,
+                    layer=layer,
+                    device=device,
+                    prompt_type=prompt_type,
+                )
+                probe_accuracies_layerwise.append(probe_accuracies)
+
+            pickle_path = make_output_path(
+                prompt_type, model_family, model_size, model_type,
+                f"{prompt_type}_logical_probe_accuracies_layerwise.pkl"
+            )
+            with open(pickle_path, "wb") as f:
+                pickle.dump(probe_accuracies_layerwise, f)
+
+            print(f"\n=>=> Finished probing for {prompt_type} prompts!\n")
+
+        # run_step2(train_sets=train_sets, 
+        #           train_set_sizes=train_set_sizes,
+        #           model_family=model_family, 
+        #           model_size=model_size,
+        #           model_type=model_type, 
+        #           layer=0, 
+        #           device=device,
+        #           prompt_type=prompt_type)
+        # print("\n=>=> Finish running the step 2!\n")
 
 
     return
