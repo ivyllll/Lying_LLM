@@ -14,6 +14,7 @@ from collections import defaultdict
 from probes import TTPD, LRProbe
 from utils import (DataManager, dataset_sizes, collect_training_data,
                    compute_statistics, compute_average_accuracies)
+from sae_utils import SAEWrapper
 
 # -----------------------------------------------------------------------------
 #                        Globals & Re‑usable helpers
@@ -35,7 +36,11 @@ PROMPT2ACTS_DIR = {
 }
 def make_output_path(prompt_type: str, model_family: str, model_size: str, model_type: str, fname: str) -> str:
     """Return an output file path and make sure the directory exists."""
-    root = os.path.join("experimental_outputs", prompt_type, model_family, model_size, model_type)
+    root = os.path.join("experimental_outputs/probing_and_visualization/sae", 
+                        prompt_type, 
+                        model_family, 
+                        model_size, 
+                        model_type)
     os.makedirs(root, exist_ok=True)
     return os.path.join(root, fname)
 
@@ -98,6 +103,15 @@ def run_step1(
                                               layer=layer,
                                               base_dir=acts_dir,
                                               device=device)
+                    # Load SAE encoder
+                    sae = SAEWrapper(release="llama_scope_lxr_32x", sae_id=f"l{layer}r_32x", device=device)
+
+                    # Pass activations through SAE encoder
+                    acts_centered = sae.encode(acts_centered)
+                    acts = sae.encode(acts)
+
+                    torch.cuda.empty_cache()        # clear the cache to precent cuda out of memory
+
                     # print("=> acts_centered.size(): {}\nacts.size(): {}"
                     #       "\nlabels.size(): {}\npolarities.size(): {}"
                     #       .format(acts_centered.size(), acts.size(),
@@ -195,6 +209,16 @@ def run_step2(
                                           model_type=model_type,
                                           base_dir=acts_dir,
                                           layer=layer)
+
+                # Load SAE encoder
+                sae = SAEWrapper(release="llama_scope_lxr_32x", sae_id=f"l{layer}r_32x", device=device)
+
+                # Pass activations through SAE encoder
+                acts_centered = sae.encode(acts_centered)
+                acts = sae.encode(acts)
+
+                torch.cuda.empty_cache()
+
                 if probe_type == TTPD:
                     """from probes import TTPD"""
                     probe = TTPD.from_data(acts_centered=acts_centered,
@@ -217,6 +241,7 @@ def run_step2(
                                    center=False,
                                    device=device)
                     acts, labels = dm.data[val_set]
+                    acts = sae.encode(acts)
 
                     # classifier specific predictions
                     predictions = probe.pred(acts)
