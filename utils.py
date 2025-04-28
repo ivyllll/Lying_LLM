@@ -4,6 +4,7 @@ import numpy as np
 import os
 from glob import glob
 import random
+from tqdm import tqdm
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 ACTS_BATCH_SIZE = 25
@@ -136,7 +137,7 @@ def collect_training_data(dataset_names, train_set_sizes, model_family, model_si
     """
     all_acts_centered, all_acts, all_labels, all_polarities = [], [], [], []
     
-    for dataset_name in dataset_names:
+    for dataset_name in tqdm(dataset_names, desc="Loading datasets for training"):
         dm = DataManager(base_dir=base_dir)
         dm.add_dataset(dataset_name, model_family, model_size, model_type, layer, split=None, center=False, device=device)
         acts, labels = dm.data[dataset_name]

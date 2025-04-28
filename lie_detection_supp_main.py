@@ -65,17 +65,17 @@ def run_step1(
     probe_types = [TTPD, LRProbe]
     results:dict = {TTPD: defaultdict(list),
                LRProbe: defaultdict(list)}
-    num_iter = 20
+    num_iter = 2
 
     total_iterations = len(probe_types) * num_iter * len(train_sets)
     with tqdm(total=total_iterations,
               desc="Training and evaluating "
                    "classifiers") as pbar:  # progress bar
         """from probes import CCSProbe, TTPD, LRProbe, MMProbe"""
-        for probe_type in probe_types:
-            for n in range(num_iter):
+        for probe_type in tqdm(probe_types, desc="Probing with different methods", leave=True):
+            for n in tqdm(range(num_iter), desc=f"{probe_type.__name__} iterations", leave=False):
                 indices = np.arange(0, len(train_sets), 2)
-                for i in indices:
+                for i in tqdm(indices, desc=f"Cross-validation folds", leave=False):
                     """
                        Get a new NumPy array with the specified
                     elements removed for cross-validation training
@@ -106,9 +106,14 @@ def run_step1(
                     # Load SAE encoder
                     sae = SAEWrapper(release="llama_scope_lxr_32x", sae_id=f"l{layer}r_32x", device=device)
 
-                    # Pass activations through SAE encoder
-                    acts_centered = sae.encode(acts_centered)
-                    acts = sae.encode(acts)
+                    acts_centered = acts_centered.to(device)
+                    acts = acts.to(device)
+
+                    # Pass activations through SAE encoder (move to cpu)
+                    acts_centered = sae.encode(acts_centered).cpu().float()
+                    acts = sae.encode(acts).cpu().float()
+                    labels = labels.cpu().float()
+                    polarities = polarities.cpu().float()
 
                     torch.cuda.empty_cache()        # clear the cache to precent cuda out of memory
 
@@ -389,9 +394,9 @@ def main():
     prompt_type = "neutral"
     pickle_path = make_output_path(prompt_type, model_family, model_size, model_type, "chat_probe_accuracies_layerwise.pkl")
 
-    run_step = {"step1": False, "step2": True}
+    run_step = {"step1": True, "step2": False}
 
-    device = 'cpu'
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     train_sets = ["cities", "neg_cities", "sp_en_trans", "neg_sp_en_trans", 
                   "inventors", "neg_inventors", "animal_class", "neg_animal_class", 
@@ -413,8 +418,9 @@ def main():
         for model_type in model_type_list:
             print("\n=> For {}...".format(model_type))
             probe_accuracies_layerwise = []
-            for layer in range(0, layer_num):
-                print("\n=> For {}...".format(layer))
+
+            for layer in tqdm(range(0, layer_num), desc=f"[Step1-{prompt_type}] Probing Layers"):
+             
                 probe_accuracies = run_step1(
                     train_sets=train_sets,
                     train_set_sizes=train_set_sizes,

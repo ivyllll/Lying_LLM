@@ -34,7 +34,7 @@ def learn_polarity_direction(acts, polarities):
     polarities_copy = polarities.clone()
     polarities_copy[polarities_copy == -1.0] = 0.0
     LR_polarity = LogisticRegression(penalty=None, fit_intercept=True)
-    LR_polarity.fit(acts.numpy(), polarities_copy.numpy())
+    LR_polarity.fit(acts.detach().cpu().numpy(), polarities_copy.detach().cpu().numpy())
     polarity_direc = LR_polarity.coef_
     return polarity_direc
 
@@ -47,7 +47,7 @@ class TTPD():
     def from_data(acts_centered, acts, labels, polarities):
         probe = TTPD()
         probe.t_g, _ = learn_truth_directions(acts_centered, labels, polarities)
-        probe.t_g = probe.t_g.numpy()
+        probe.t_g = probe.t_g.detach().cpu().numpy()
         probe.polarity_direc = learn_polarity_direction(acts, polarities)
         acts_2d = probe._project_acts(acts)
         probe.LR = LogisticRegression(penalty=None, fit_intercept=True)
