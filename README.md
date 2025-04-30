@@ -26,11 +26,12 @@ Run **step2**:
 
 4/26；
 
+（Not working!!! SAE feature space is too sparse)
+
 Add SAE on the collected activations to do further analysis:
 
 1. Feature Shift Analysis for truthful vs neutral / truthful vs deceptive / neutral vs deceptive
         using Cosine Similarity, Overlap Ratio, and L2 score to evaluate the tendency through layers
-2. 
 
 
 4/27；
@@ -47,7 +48,17 @@ Peak layer summary:
   TTPD peak at Layer 14 with 80.42%
   LR peak at Layer 15 with 71.33%
 
-## 🔍 Project Summary: Probing and Visualizing Internal Representations of LLaMA
+4/28;
+
+  Collect the activation of user end token ".", instead of the assistant start token. To see the feature shift analysis (the plots seem not that visible compared with the previous ones)
+
+4/29;
+
+Run **step1** again for the user end activations. See the accuracy graphs and the cluster graphs.
+
+
+
+## 🔍 Summary of Step1: Probing and Visualizing Internal Representations of LLaMA
 
 ### 🔗 Function Call Overview
 
