@@ -55,7 +55,11 @@ Peak layer summary:
 4/29;
 
 Run **step1** again for the user end activations. See the accuracy graphs and the cluster graphs.
+（Too slow, only run "animal_class", "neg_animal_class", "element_symb", "neg_element_symb")
 
+4/30；
+
+Find the topk different neurons between different prompts.
 
 
 ## 🔍 Summary of Step1: Probing and Visualizing Internal Representations of LLaMA
