@@ -11,7 +11,7 @@ PROMPT_TYPES = ["truthful", "neutral", "deceptive"]
 MODEL_FAMILY = "Llama3.1"
 MODEL_SIZE = "8B"
 MODEL_TYPE = "chat"
-SAVE_DIR = Path("figures")
+SAVE_DIR = Path("experimental_outputs/probing_and_visualization/accuracy_figures_user_end")
 SAVE_DIR.mkdir(exist_ok=True)
 
 # -------------------------------------------------------------------------
@@ -182,7 +182,7 @@ def main():
     
     plot_probe_accuracy_comparison(data, MODEL_FAMILY, MODEL_SIZE, MODEL_TYPE, SAVE_DIR)
 
-    export_markdown_table(data, save_path=SAVE_DIR / "logical_probe_accuracy_table.md")
+    export_markdown_table(data, save_path=SAVE_DIR / "logical_probe_accuracy_table_usr_end.md")
 
     find_peak_layer(data)
 

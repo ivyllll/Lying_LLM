@@ -18,7 +18,7 @@ LAYERS_TO_ANALYZE = list(range(32))
 DEVICE = "cuda:0"
 ACTS_DIR = Path("acts")
 PROMPT_TYPES = ["truthful", "deceptive", "neutral"]
-DATASET = "cities"
+DATASETS = ["cities", "animal_class", "element_symb", "facts", "inventors", "sp_en_trans"] # cities
 OUTPUT_DIR = Path("feature_shift_results")
 OUTPUT_DIR.mkdir(exist_ok=True)
 PROMPT_PAIRS = [
@@ -30,9 +30,10 @@ PROMPT_PAIRS = [
 # ---------------------------------------------------------------------
 #                         Helper Functions
 # ---------------------------------------------------------------------
-def load_batch(prompt_type: str, layer: int, idx: int) -> t.Tensor:
-    path = ACTS_DIR / f"acts_{prompt_type}_prompt" / "Llama3.1" / "8B" / "chat" / DATASET / f"layer_{layer}_{idx}.pt"
+def load_batch(prompt_type: str, dataset: str, layer: int, idx: int) -> t.Tensor:
+    path = ACTS_DIR / f"acts_{prompt_type}_prompt_user_end" / "Llama3.1" / "8B" / "chat" / dataset / f"layer_{layer}_{idx}.pt"
     return t.load(path, map_location=DEVICE).float()
+
 
 def compute_cosine(x: t.Tensor, y: t.Tensor) -> t.Tensor:
     """
@@ -60,23 +61,23 @@ def compute_l2(x: t.Tensor, y: t.Tensor) -> t.Tensor:
 # ---------------------------------------------------------------------
 #                        Per-Layer Worker
 # ---------------------------------------------------------------------
-def run_single_layer(LAYER: int):
-    print(f"\nAnalyzing Layer {LAYER}...")
+def run_single_layer(dataset: str, layer: int):
+    print(f"\nAnalyzing Dataset {dataset} - Layer {layer}...")
 
-    SAE_ID = f"l{LAYER}r_32x"
+    SAE_ID = f"l{layer}r_32x"
     sae = SAEWrapper(release=MODEL_RELEASE, sae_id=SAE_ID, device=DEVICE)
 
-    sample_dir = ACTS_DIR / "acts_truthful_prompt" / "Llama3.1" / "8B" / "chat" / DATASET
-    indexes = sorted(int(p.stem.split("_")[-1]) for p in sample_dir.glob(f"layer_{LAYER}_*.pt"))
+    sample_dir = ACTS_DIR / "acts_truthful_prompt" / "Llama3.1" / "8B" / "chat" / dataset
+    indexes = sorted(int(p.stem.split("_")[-1]) for p in sample_dir.glob(f"layer_{layer}_*.pt"))
 
     for a, b in PROMPT_PAIRS:
-        subdir = OUTPUT_DIR / f"{a}_vs_{b}"
+        subdir = OUTPUT_DIR / f"user_end_{a}_vs_{b}" / dataset
         subdir.mkdir(exist_ok=True, parents=True)
 
         l2_list, cosine_list, overlap_list = [], [], []
-        for idx in tqdm.tqdm(indexes, desc=f"Layer {LAYER} [{a} vs {b}]"):
-            acts_a = load_batch(a, LAYER, idx).float()
-            acts_b = load_batch(b, LAYER, idx).float()
+        for idx in tqdm.tqdm(indexes, desc=f"Dataset {dataset} Layer {layer} [{a} vs {b}]"):
+            acts_a = load_batch(a, dataset, layer, idx).float()
+            acts_b = load_batch(b, dataset, layer, idx).float()
 
             z_a = sae.encode(acts_a).float()
             z_b = sae.encode(acts_b).float()
@@ -90,7 +91,7 @@ def run_single_layer(LAYER: int):
             overlap_list.append(overlap.detach().cpu().numpy())
 
         np.savez(
-            subdir / f"layer_{LAYER}_shifts.npz",
+            subdir / f"layer_{layer}_shifts.npz",
             l2=np.concatenate(l2_list),
             cosine=np.concatenate(cosine_list),
             overlap=np.concatenate(overlap_list),
@@ -103,10 +104,11 @@ def run_single_layer(LAYER: int):
 #                         Main Launcher
 # ---------------------------------------------------------------------
 def main():
-    for LAYER in LAYERS_TO_ANALYZE:
-        p = Process(target=run_single_layer, args=(LAYER,))
-        p.start()
-        p.join()
+    for dataset in DATASETS:
+        for layer in LAYERS_TO_ANALYZE:
+            p = Process(target=run_single_layer, args=(dataset, layer))
+            p.start()
+            p.join()
 
 if __name__ == "__main__":
     mp.set_start_method("spawn")

@@ -3,9 +3,9 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 
 def learn_truth_directions(acts_centered, labels, polarities):
-    # Check if all polarities are zero (handling both int and float)
+    # Check if all polarities are zero (handling both int and float) -> if yes learn only t_g
     all_polarities_zero = t.allclose(polarities, t.tensor([0.0]), atol=1e-8)
-    # Make sure the labels only have values -1.0 and 1.0
+    # Make the sure the labels only have the values -1.0 and 1.0
     labels_copy = labels.clone()
     labels_copy = t.where(labels_copy == 0.0, t.tensor(-1.0), labels_copy)
     
@@ -14,8 +14,11 @@ def learn_truth_directions(acts_centered, labels, polarities):
     else:
         X = t.column_stack([labels_copy, labels_copy * polarities])
 
-    # Analytical OLS solution
+    # Compute the analytical OLS solution
+    # import pdb; pdb.set_trace()
+    # gram = X.T @ X
     solution = t.linalg.inv(X.T @ X) @ X.T @ acts_centered
+    # solution = t.linalg.pinv(X) @ acts_centered
 
     # Extract t_g and t_p
     if all_polarities_zero:
@@ -31,7 +34,7 @@ def learn_polarity_direction(acts, polarities):
     polarities_copy = polarities.clone()
     polarities_copy[polarities_copy == -1.0] = 0.0
     LR_polarity = LogisticRegression(penalty=None, fit_intercept=True)
-    LR_polarity.fit(acts.detach().cpu().numpy(), polarities_copy.detach().cpu().numpy())
+    LR_polarity.fit(acts.numpy(), polarities_copy.numpy())
     polarity_direc = LR_polarity.coef_
     return polarity_direc
 
@@ -41,15 +44,14 @@ class TTPD():
         self.polarity_direc = None
         self.LR = None
 
-    @staticmethod
     def from_data(acts_centered, acts, labels, polarities):
         probe = TTPD()
         probe.t_g, _ = learn_truth_directions(acts_centered, labels, polarities)
-        probe.t_g = probe.t_g.detach().cpu().numpy()  # ✅ detach + cpu
+        probe.t_g = probe.t_g.numpy()
         probe.polarity_direc = learn_polarity_direction(acts, polarities)
         acts_2d = probe._project_acts(acts)
         probe.LR = LogisticRegression(penalty=None, fit_intercept=True)
-        probe.LR.fit(acts_2d, labels.detach().cpu().numpy())  # ✅ labels.detach().cpu().numpy()
+        probe.LR.fit(acts_2d, labels.numpy())
         return probe
     
     def pred(self, acts):
@@ -57,10 +59,12 @@ class TTPD():
         return t.tensor(self.LR.predict(acts_2d))
     
     def _project_acts(self, acts):
-        proj_t_g = acts.detach().cpu().numpy() @ self.t_g  # ✅ acts.detach().cpu().numpy()
-        proj_p = acts.detach().cpu().numpy() @ self.polarity_direc.T
+        proj_t_g = acts.numpy() @ self.t_g
+        proj_p = acts.numpy() @ self.polarity_direc.T
         acts_2d = np.concatenate((proj_t_g[:, None], proj_p), axis=1)
         return acts_2d
+
+
 
 def ccs_loss(probe, acts, neg_acts):
     p_pos = probe(acts)
@@ -68,6 +72,7 @@ def ccs_loss(probe, acts, neg_acts):
     consistency_losses = (p_pos - (1 - p_neg)) ** 2
     confidence_losses = t.min(t.stack((p_pos, p_neg), dim=-1), dim=-1).values ** 2
     return t.mean(consistency_losses + confidence_losses)
+
 
 class CCSProbe(t.nn.Module):
     def __init__(self, d_in):
@@ -83,7 +88,6 @@ class CCSProbe(t.nn.Module):
     def pred(self, acts, iid=None):
         return self(acts).round()
     
-    @staticmethod
     def from_data(acts, neg_acts, labels=None, lr=0.001, weight_decay=0.1, epochs=1000, device='cpu'):
         acts, neg_acts = acts.to(device), neg_acts.to(device)
         probe = CCSProbe(acts.shape[-1]).to(device)
@@ -95,7 +99,7 @@ class CCSProbe(t.nn.Module):
             loss.backward()
             opt.step()
 
-        if labels is not None:  # flip direction if needed
+        if labels is not None: # flip direction if needed
             labels = labels.to(device)
             acc = (probe.pred(acts) == labels).float().mean()
             if acc < 0.5:
@@ -110,20 +114,21 @@ class CCSProbe(t.nn.Module):
     @property
     def bias(self):
         return self.net[0].bias.data[0]
+    
 
 class LRProbe():
     def __init__(self):
         self.LR = None
 
-    @staticmethod
     def from_data(acts, labels):
         probe = LRProbe()
         probe.LR = LogisticRegression(penalty=None, fit_intercept=True)
-        probe.LR.fit(acts.detach().cpu().numpy(), labels.detach().cpu().numpy())  # ✅ detach + cpu
+        probe.LR.fit(acts.numpy(), labels.numpy())
         return probe
 
     def pred(self, acts):
-        return t.tensor(self.LR.predict(acts.detach().cpu().numpy()))  # ✅ detach + cpu
+        return t.tensor(self.LR.predict(acts))
+    
 
 class MMProbe(t.nn.Module):
     def __init__(self, direction, LR):
@@ -133,20 +138,23 @@ class MMProbe(t.nn.Module):
 
     def forward(self, acts):
         proj = acts @ self.direction
-        return t.tensor(self.LR.predict(proj.detach().cpu().numpy()[:, None]))  # ✅ detach + cpu
+        return t.tensor(self.LR.predict(proj[:, None]))
 
     def pred(self, x):
         return self(x).round()
 
-    @staticmethod
     def from_data(acts, labels, device='cpu'):
-        acts, labels = acts.to(device), labels.to(device)
+        acts, labels
         pos_acts, neg_acts = acts[labels==1], acts[labels==0]
         pos_mean, neg_mean = pos_acts.mean(0), neg_acts.mean(0)
         direction = pos_mean - neg_mean
+        # project activations onto direction
         proj = acts @ direction
+        # fit bias
         LR = LogisticRegression(penalty=None, fit_intercept=True)
-        LR.fit(proj.detach().cpu().numpy()[:, None], labels.detach().cpu().numpy())  # ✅ detach + cpu
+        LR.fit(proj[:, None], labels)
         
         probe = MMProbe(direction, LR).to(device)
+
         return probe
+

@@ -14,7 +14,6 @@ from collections import defaultdict
 from probes import TTPD, LRProbe
 from utils import (DataManager, dataset_sizes, collect_training_data,
                    compute_statistics, compute_average_accuracies)
-from sae_utils import SAEWrapper
 
 # -----------------------------------------------------------------------------
 #                        Globals & Re‑usable helpers
@@ -36,7 +35,7 @@ PROMPT2ACTS_DIR = {
 }
 def make_output_path(prompt_type: str, model_family: str, model_size: str, model_type: str, fname: str) -> str:
     """Return an output file path and make sure the directory exists."""
-    root = os.path.join("experimental_outputs/probing_and_visualization/sae", 
+    root = os.path.join("experimental_outputs/probing_and_visualization", 
                         prompt_type, 
                         model_family, 
                         model_size, 
@@ -65,17 +64,17 @@ def run_step1(
     probe_types = [TTPD, LRProbe]
     results:dict = {TTPD: defaultdict(list),
                LRProbe: defaultdict(list)}
-    num_iter = 2
+    num_iter = 20
 
     total_iterations = len(probe_types) * num_iter * len(train_sets)
     with tqdm(total=total_iterations,
               desc="Training and evaluating "
                    "classifiers") as pbar:  # progress bar
         """from probes import CCSProbe, TTPD, LRProbe, MMProbe"""
-        for probe_type in tqdm(probe_types, desc="Probing with different methods", leave=True):
-            for n in tqdm(range(num_iter), desc=f"{probe_type.__name__} iterations", leave=False):
+        for probe_type in probe_types:
+            for n in range(num_iter):
                 indices = np.arange(0, len(train_sets), 2)
-                for i in tqdm(indices, desc=f"Cross-validation folds", leave=False):
+                for i in indices:
                     """
                        Get a new NumPy array with the specified
                     elements removed for cross-validation training
@@ -103,20 +102,6 @@ def run_step1(
                                               layer=layer,
                                               base_dir=acts_dir,
                                               device=device)
-                    # Load SAE encoder
-                    sae = SAEWrapper(release="llama_scope_lxr_32x", sae_id=f"l{layer}r_32x", device=device)
-
-                    acts_centered = acts_centered.to(device)
-                    acts = acts.to(device)
-
-                    # Pass activations through SAE encoder (move to cpu)
-                    acts_centered = sae.encode(acts_centered).cpu().float()
-                    acts = sae.encode(acts).cpu().float()
-                    labels = labels.cpu().float()
-                    polarities = polarities.cpu().float()
-
-                    torch.cuda.empty_cache()        # clear the cache to precent cuda out of memory
-
                     # print("=> acts_centered.size(): {}\nacts.size(): {}"
                     #       "\nlabels.size(): {}\npolarities.size(): {}"
                     #       .format(acts_centered.size(), acts.size(),
@@ -214,16 +199,6 @@ def run_step2(
                                           model_type=model_type,
                                           base_dir=acts_dir,
                                           layer=layer)
-
-                # Load SAE encoder
-                sae = SAEWrapper(release="llama_scope_lxr_32x", sae_id=f"l{layer}r_32x", device=device)
-
-                # Pass activations through SAE encoder
-                acts_centered = sae.encode(acts_centered)
-                acts = sae.encode(acts)
-
-                torch.cuda.empty_cache()
-
                 if probe_type == TTPD:
                     """from probes import TTPD"""
                     probe = TTPD.from_data(acts_centered=acts_centered,
@@ -246,7 +221,6 @@ def run_step2(
                                    center=False,
                                    device=device)
                     acts, labels = dm.data[val_set]
-                    acts = sae.encode(acts)
 
                     # classifier specific predictions
                     predictions = probe.pred(acts)
@@ -308,7 +282,9 @@ def visualize_layerwise_probe_accuracy(
     plt.grid(True)
     plt.legend()
 
-    out_path = make_output_path(prompt_type, model_family, model_size, model_type, "layerwise_probe_accuracy.png")
+    out_path = make_output_path(
+        prompt_type, model_family, model_size, model_type, 
+        "layerwise_probe_accuracy.png")
     plt.tight_layout()
     plt.savefig(out_path)
     plt.close()
@@ -336,50 +312,50 @@ def visualize_latent_space(
     - labels: torch.Size([1640])
     - polarities: torch.Size([1640])
     """
-    acts_centered, acts, labels, polarities = \
-        collect_training_data(dataset_names=np.array(train_sets),
-                              train_set_sizes=train_set_sizes,
-                              model_family=model_family,
-                              model_size=model_size,
-                              model_type=model_type,
-                              layer=layer,
-                              base_dir=acts_dir,
-                              device=device)
-    # print("=> acts_centered.size(): {}\nacts.size(): {}"
-    #       "\nlabels.size(): {}\npolarities.size():{}"
-    #       .format(acts_centered.size(), acts.size(),
-    #               labels.size(), polarities.size()))
-    # print(torch.min(acts), torch.max(acts))
-    # print(labels)
-
-    # Assume your data is provided as PyTorch tensors
-    # acts: torch.Size([1968, 4096]), labels: torch.Size([1968])
-    # Example placeholder (replace with your actual data):
-    # acts = torch.randn(1968, 4096)
-    # labels = torch.randint(0, 2, (1968,))
-
-    acts_np = StandardScaler().fit_transform(acts.cpu().numpy())
-    labels_np = labels.cpu().numpy()
-
+    # ---- choose dimensionality-reduction methods once ----
     reducers = {
-        "tsne": TSNE(n_components=2, perplexity=30, random_state=42),
-        "umap": umap.UMAP(n_neighbors=30, min_dist=0.1, random_state=42),
-        "pca": PCA(n_components=2),
+        "tsne":  TSNE(n_components=2, perplexity=30, random_state=42),
+        "umap":  umap.UMAP(n_neighbors=30, min_dist=0.1, random_state=42),
+        "pca":   PCA(n_components=2),
         "isomap": Isomap(n_neighbors=10, n_components=2),
     }
 
-    for name, reducer in reducers.items():
-        reduced = reducer.fit_transform(acts_np)
-        plt.figure(figsize=(8, 6))
-        plt.scatter(reduced[:, 0], reduced[:, 1], c=labels_np, cmap="viridis", s=10, alpha=0.7)
-        plt.colorbar(label="Label")
-        plt.title(f"{name.upper()} - Layer {layer+1}")
-        plt.xlabel("Component 1")
-        plt.ylabel("Component 2")
-        plt.grid(True)
-        out_path = make_output_path(prompt_type, model_family, model_size, model_type, f"{name}_layer{layer+1}.png")
-        plt.savefig(out_path)
-        plt.close()
+    # ---- now iterate over datasets and plot each separately ----
+    for ds in train_sets:
+        dm = DataManager(base_dir=acts_dir)
+        dm.add_dataset(
+            ds,
+            model_family, model_size, model_type,
+            layer,
+            split=None,         # full split, no subsampling
+            center=False,
+            device=device,
+        )
+        acts_d, labels_d = dm.data[ds]        # tensors ready to plot
+        acts_np    = StandardScaler().fit_transform(acts_d.cpu().numpy())
+        labels_np  = labels_d.cpu().numpy()
+
+        acts_np = StandardScaler().fit_transform(acts_d.cpu().numpy())
+        labels_np = labels_d.cpu().numpy()
+
+        for name, reducer in reducers.items():
+            reduced = reducer.fit_transform(acts_np)
+            plt.figure(figsize=(8, 6))
+            plt.scatter(reduced[:, 0], reduced[:, 1],
+                        c=labels_np, cmap="viridis", s=10, alpha=0.7)
+            plt.colorbar(label="Label")
+            plt.title(f"{ds} – {name.upper()} – Layer {layer+1}")
+            plt.xlabel("Component 1")
+            plt.ylabel("Component 2")
+            plt.grid(True)
+
+            out_path = make_output_path(
+                prompt_type, model_family, model_size, model_type,
+                f"{ds}_{name}_layer{layer+1}.png"
+            )
+            plt.savefig(out_path)
+            plt.close()
+
 
 
 
@@ -391,16 +367,19 @@ def main():
     model_type_list = ['chat']
     layer_num = 32
     # layer = 12  # layer from which to extract activations
-    prompt_type = "neutral"
-    pickle_path = make_output_path(prompt_type, model_family, model_size, model_type, "chat_probe_accuracies_layerwise.pkl")
+    prompt_type = "deceptive"
+    pickle_path = make_output_path( 
+        prompt_type, model_family, model_size, model_type, 
+        "chat_probe_accuracies_layerwise.pkl")
 
-    run_step = {"step1": True, "step2": False}
+    run_step = {"step1": False, "step2": False}
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = 'cpu'
 
     train_sets = ["cities", "neg_cities", "sp_en_trans", "neg_sp_en_trans", 
                   "inventors", "neg_inventors", "animal_class", "neg_animal_class", 
-                  "element_symb", "neg_element_symb", "facts", "neg_facts"]
+                  "element_symb", "neg_element_symb", "facts", "neg_facts",
+                  "common_claim_true_false"]
     train_set_sizes = dataset_sizes(train_sets)
 
     if run_step["step1"]:
@@ -418,9 +397,8 @@ def main():
         for model_type in model_type_list:
             print("\n=> For {}...".format(model_type))
             probe_accuracies_layerwise = []
-
-            for layer in tqdm(range(0, layer_num), desc=f"[Step1-{prompt_type}] Probing Layers"):
-             
+            for layer in range(0, layer_num):
+                print("\n=> For {}...".format(layer))
                 probe_accuracies = run_step1(
                     train_sets=train_sets,
                     train_set_sizes=train_set_sizes,
@@ -445,23 +423,26 @@ def main():
     #     model_type=model_type,
     #     prompt_type=prompt_type,
     # )
+ 
+    plot_ds   = "common_claim_true_false"       # the dataset you want to visualise
+    plot_size = train_set_sizes[plot_ds]      # >0, whatever was computed before
+    plot_layers = [12, 14, 31]      # 0-based indices → layers 13, 15, 32
 
-    # # for layer in range(0, layer_num):
-    # for layer in [12, 14, 31]:
-    #     print("\n=> Visualizing layer {}...".format(layer+1))
-    #     # ---------------------------- force to visualize layer 13/15/32 ----------------------------
-    #     # layer = 31  
-    #     visualize_latent_space(
-    #         train_sets=train_sets,
-    #         train_set_sizes=train_set_sizes,
-    #         model_family=model_family, 
-    #         model_size=model_size,
-    #         model_type=model_type, 
-    #         layer=layer,
-    #         prompt_type=prompt_type,
-    #         device=device,
-    #     )
-    #     # exit(-1)
+    # for layer in range(0, layer_num):
+    for layer in plot_layers:
+        print("\n=> Visualizing layer {}...".format(layer+1))
+        # ---------------------------- force to visualize layer 13/15/32 ----------------------------
+        # layer = 31  
+        visualize_latent_space(
+            train_sets=[plot_ds],
+            train_set_sizes={plot_ds: plot_size},
+            model_family=model_family, 
+            model_size=model_size,
+            model_type=model_type, 
+            layer=layer,
+            prompt_type=prompt_type,
+            device=device,
+        )
 
 
 

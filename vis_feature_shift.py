@@ -12,8 +12,8 @@ PROMPT_PAIRS = [
     ("neutral", "deceptive"),
 ]
 LAYERS = list(range(32))
+DATASETS = ["cities", "animal_class", "facts", "element_symb", "inventors", "sp_en_trans"]  
 
-# Metric labels
 METRICS = ["l2", "cosine", "overlap"]
 DISPLAY_NAMES = {
     "l2": "L2 Distance",
@@ -26,19 +26,25 @@ DISPLAY_NAMES = {
 # ---------------------------------------------------------------------
 def load_metrics(pair):
     a, b = pair
-    l1_all, l2_all, cosine_all, overlap_all = [], [], [], []
+    l2_all, cosine_all, overlap_all = [], [], []
 
     for layer in LAYERS:
-        path = RESULTS_DIR / f"{a}_vs_{b}" / f"layer_{layer}_shifts.npz"
-        data = np.load(path)
+        l2_layer, cosine_layer, overlap_layer = [], [], []
+        
+        for dataset in DATASETS:
+            path = RESULTS_DIR / f"user_end_{a}_vs_{b}" / dataset / f"layer_{layer}_shifts.npz"
+            data = np.load(path)
 
-        l1_all.append((data["l1"].mean(), data["l1"].std()))
-        l2_all.append((data["l2"].mean(), data["l2"].std()))
-        cosine_all.append((data["cosine"].mean(), data["cosine"].std()))
-        overlap_all.append((data["overlap"].mean(), data["overlap"].std()))
+            l2_layer.append(data["l2"])
+            cosine_layer.append(data["cosine"])
+            overlap_layer.append(data["overlap"])
+
+        l2_all.append((np.concatenate(l2_layer).mean(), np.concatenate(l2_layer).std()))
+        cosine_all.append((np.concatenate(cosine_layer).mean(), np.concatenate(cosine_layer).std()))
+        overlap_all.append((np.concatenate(overlap_layer).mean(), np.concatenate(overlap_layer).std()))
+
 
     return {
-        "l1": np.array(l1_all),
         "l2": np.array(l2_all),
         "cosine": np.array(cosine_all),
         "overlap": np.array(overlap_all),
@@ -79,7 +85,7 @@ def plot_metrics_for_pair(pair, metrics):
     plt.title(f"Feature Shift Metrics: {a} vs {b}", fontsize=14)
     plt.tight_layout()
 
-    save_path = f"feature_shift_{a}_vs_{b}.png"
+    save_path = f"experimental_outputs/feature_shift_results/user_end_feature_shift_{a}_vs_{b}.png"
     plt.savefig(save_path, dpi=300)
     print(f"Saved figure: {save_path}")
     plt.close()
