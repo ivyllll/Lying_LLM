@@ -367,7 +367,7 @@ def main():
     model_type_list = ['chat']
     layer_num = 32
     # layer = 12  # layer from which to extract activations
-    prompt_type = "deceptive"
+    prompt_type = "truthful"
     pickle_path = make_output_path( 
         prompt_type, model_family, model_size, model_type, 
         "chat_probe_accuracies_layerwise.pkl")

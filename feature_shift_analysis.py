@@ -18,7 +18,8 @@ LAYERS_TO_ANALYZE = list(range(32))
 DEVICE = "cuda:0"
 ACTS_DIR = Path("acts")
 PROMPT_TYPES = ["truthful", "deceptive", "neutral"]
-DATASETS = ["cities", "animal_class", "element_symb", "facts", "inventors", "sp_en_trans"] # cities
+DATASETS = ["counterfact_true_false"]  # "common_claim_true_false"
+# "cities", "animal_class", "element_symb", "facts", "inventors", "sp_en_trans"
 OUTPUT_DIR = Path("feature_shift_results")
 OUTPUT_DIR.mkdir(exist_ok=True)
 PROMPT_PAIRS = [
@@ -31,7 +32,7 @@ PROMPT_PAIRS = [
 #                         Helper Functions
 # ---------------------------------------------------------------------
 def load_batch(prompt_type: str, dataset: str, layer: int, idx: int) -> t.Tensor:
-    path = ACTS_DIR / f"acts_{prompt_type}_prompt_user_end" / "Llama3.1" / "8B" / "chat" / dataset / f"layer_{layer}_{idx}.pt"
+    path = ACTS_DIR / f"acts_{prompt_type}_prompt" / "Llama3.1" / "8B" / "chat" / dataset / f"layer_{layer}_{idx}.pt"
     return t.load(path, map_location=DEVICE).float()
 
 
@@ -71,7 +72,7 @@ def run_single_layer(dataset: str, layer: int):
     indexes = sorted(int(p.stem.split("_")[-1]) for p in sample_dir.glob(f"layer_{layer}_*.pt"))
 
     for a, b in PROMPT_PAIRS:
-        subdir = OUTPUT_DIR / f"user_end_{a}_vs_{b}" / dataset
+        subdir = OUTPUT_DIR / f"{a}_vs_{b}" / dataset
         subdir.mkdir(exist_ok=True, parents=True)
 
         l2_list, cosine_list, overlap_list = [], [], []

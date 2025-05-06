@@ -1,19 +1,20 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+from tqdm import tqdm
 
 # ---------------------------------------------------------------------
 #                   Configuration
 # ---------------------------------------------------------------------
-RESULTS_DIR = Path("feature_shift_results")  
+RESULTS_DIR = Path("feature_shift_results")
 PROMPT_PAIRS = [
     ("truthful", "deceptive"),
     ("truthful", "neutral"),
     ("neutral", "deceptive"),
 ]
 LAYERS = list(range(32))
-DATASETS = ["cities", "animal_class", "facts", "element_symb", "inventors", "sp_en_trans"]  
-
+DATASETS = ["counterfact_true_false"]  # common_claim_true_false
+# "cities", "animal_class", "facts", "element_symb", "inventors", "sp_en_trans"
 METRICS = ["l2", "cosine", "overlap"]
 DISPLAY_NAMES = {
     "l2": "L2 Distance",
@@ -22,27 +23,18 @@ DISPLAY_NAMES = {
 }
 
 # ---------------------------------------------------------------------
-#                   Load Data
+#                   Load Data for ONE dataset
 # ---------------------------------------------------------------------
-def load_metrics(pair):
+def load_metrics(pair, dataset):
     a, b = pair
     l2_all, cosine_all, overlap_all = [], [], []
 
     for layer in LAYERS:
-        l2_layer, cosine_layer, overlap_layer = [], [], []
-        
-        for dataset in DATASETS:
-            path = RESULTS_DIR / f"user_end_{a}_vs_{b}" / dataset / f"layer_{layer}_shifts.npz"
-            data = np.load(path)
-
-            l2_layer.append(data["l2"])
-            cosine_layer.append(data["cosine"])
-            overlap_layer.append(data["overlap"])
-
-        l2_all.append((np.concatenate(l2_layer).mean(), np.concatenate(l2_layer).std()))
-        cosine_all.append((np.concatenate(cosine_layer).mean(), np.concatenate(cosine_layer).std()))
-        overlap_all.append((np.concatenate(overlap_layer).mean(), np.concatenate(overlap_layer).std()))
-
+        path = RESULTS_DIR / f"{a}_vs_{b}" / dataset / f"layer_{layer}_shifts.npz"
+        data = np.load(path)
+        l2_all.append((data["l2"].mean(), data["l2"].std()))
+        cosine_all.append((data["cosine"].mean(), data["cosine"].std()))
+        overlap_all.append((data["overlap"].mean(), data["overlap"].std()))
 
     return {
         "l2": np.array(l2_all),
@@ -50,54 +42,58 @@ def load_metrics(pair):
         "overlap": np.array(overlap_all),
     }
 
-
 # ---------------------------------------------------------------------
-#                     Plotting
+#                     Plotting for ONE dataset
 # ---------------------------------------------------------------------
-def plot_metrics_for_pair(pair, metrics):
+def plot_metrics_for_pair(pair, dataset, metrics):
     a, b = pair
     fig, ax1 = plt.subplots(figsize=(10, 6))
 
-    # main y axis (Cosine, Overlap)
-    colors = ["green", "red"]
-    for metric_name, color in zip(["cosine", "overlap"], colors):
-        means = metrics[metric_name][:, 0]
-        stds = metrics[metric_name][:, 1]
+    # Cosine & Overlap on ax1
+    for metric_name, color in zip(["cosine", "overlap"], ["green", "lightskyblue"]):
+        means, stds = metrics[metric_name][:,0], metrics[metric_name][:,1]
         ax1.plot(LAYERS, means, label=DISPLAY_NAMES[metric_name], color=color, marker='o')
-        ax1.fill_between(LAYERS, means-stds, means+stds, color=color, alpha=0.2)
+        ax1.fill_between(LAYERS,
+                         means - stds,
+                         means + stds,
+                         color=color,
+                         alpha=0.2)
 
     ax1.set_xlabel("Layer", fontsize=12)
-    ax1.set_ylabel("Metric Value (Cosine / Overlap)", fontsize=12)
+    ax1.set_ylabel("Value (Cosine / Overlap)", fontsize=12)
     ax1.grid(True, linestyle="--", alpha=0.6)
-    
-    # minor y axis (L2)
+
+    # L2 on ax2
     ax2 = ax1.twinx()
-    means_l2 = metrics["l2"][:, 0]
-    stds_l2 = metrics["l2"][:, 1]
+    means_l2, stds_l2 = metrics["l2"][:,0], metrics["l2"][:,1]
     ax2.plot(LAYERS, means_l2, label=DISPLAY_NAMES["l2"], color="orange", marker='s')
     ax2.fill_between(LAYERS, means_l2-stds_l2, means_l2+stds_l2, color="orange", alpha=0.2)
-    ax2.set_ylabel("L2 Distance Value", fontsize=12)
+    ax2.set_ylabel("L2 Distance", fontsize=12)
 
-    lines1, labels1 = ax1.get_legend_handles_labels()
+    # Combined legend
+    lines, labels = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, labels1 + labels2, loc="best")
+    ax1.legend(lines+lines2, labels+labels2, loc="best")
 
-    plt.title(f"Feature Shift Metrics: {a} vs {b}", fontsize=14)
+    plt.title(f"Feature Shift Metrics: {a} vs {b} — {dataset}", fontsize=14)
     plt.tight_layout()
 
-    save_path = f"experimental_outputs/feature_shift_results/user_end_feature_shift_{a}_vs_{b}.png"
-    plt.savefig(save_path, dpi=300)
-    print(f"Saved figure: {save_path}")
+    save_dir = Path("experimental_outputs/feature_shift_results")
+    save_dir.mkdir(parents=True, exist_ok=True)
+    filename = save_dir / f"feature_shift_{a}_vs_{b}_{dataset}.png"
+    plt.savefig(filename, dpi=300)
     plt.close()
+    print(f"Saved figure: {filename}")
 
 # ---------------------------------------------------------------------
 #                         Main
 # ---------------------------------------------------------------------
 def main():
     for pair in PROMPT_PAIRS:
-        metrics = load_metrics(pair)
-        plot_metrics_for_pair(pair, metrics)
+        for dataset in DATASETS:
+            print(f"Plotting {pair[0]} vs {pair[1]} on dataset {dataset}...")
+            metrics = load_metrics(pair, dataset)
+            plot_metrics_for_pair(pair, dataset, metrics)
 
 if __name__ == "__main__":
     main()
-

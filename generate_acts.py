@@ -27,10 +27,10 @@ def load_model(model_family: str, model_size: str, model_type: str, device: str)
             tokenizer = AutoTokenizer.from_pretrained(str(model_path))
             model = AutoModelForCausalLM.from_pretrained(str(model_path), torch_dtype=t.bfloat16)
             tokenizer.bos_token = '<s>'
-        elif model_family == 'Llama3.1':
+        else:
             tokenizer = AutoTokenizer.from_pretrained(str(model_path))
             model = AutoModelForCausalLM.from_pretrained(str(model_path), torch_dtype=t.bfloat16)
-        elif model_family == "Gemma2": # Gemma2 requires bfloat16 precision which is only available on new GPUs
+        if model_family == "Gemma2": # Gemma2 requires bfloat16 precision which is only available on new GPUs
             model = model.to(t.bfloat16) # Convert the model to bfloat16 precision
         else:
             model = model.half()  # storing model in float32 precision -> conversion to float16
@@ -47,46 +47,7 @@ def load_statements(dataset_name):
     statements = dataset['statement'].tolist()
     return statements
 
-def get_hidden_state_from_prompt(
-    input_ids: t.Tensor,
-    hook_out: t.Tensor,
-    tokenizer,
-    mode: str = "user_end",
-) -> t.Tensor:
-    """
-    input_ids: (1, seq_len) tokenized input
-    hook_out: (1, seq_len, hidden_dim) activation
-    tokenizer: Huggingface tokenizer
-    mode: "user_end" (get the token user end)
-          "assistant_start" (get the token before assistant start)
-    """
-    assert mode in ["user_end", "assistant_start"], f"Invalid mode {mode}, must be 'user_end' or 'assistant_start'."
-
-    if mode == "user_end":
-        eot_token_id = tokenizer.convert_tokens_to_ids("<|eot_id|>")
-        eot_positions = (input_ids[0] == eot_token_id).nonzero(as_tuple=True)[0]
-
-        if len(eot_positions) == 0:
-            print("[Warning] <|eot_id|> not found. Defaulting to last token.")
-            idx = input_ids.shape[1] - 1
-        else:
-            idx = eot_positions[0].item() - 1  # user end token
-
-    elif mode == "assistant_start":
-        assistant_token = "<|start_header_id|>assistant<|end_header_id|>"
-        assistant_token_id = tokenizer.convert_tokens_to_ids(assistant_token)
-        assistant_positions = (input_ids[0] == assistant_token_id).nonzero(as_tuple=True)[0]
-
-        if len(assistant_positions) == 0:
-            print("[Warning] Assistant header token not found. Defaulting to last token.")
-            idx = input_ids.shape[1] - 1
-        else:
-            idx = assistant_positions[0].item() - 1
-
-    return hook_out[0, idx]
-
-
-def get_acts(statements, tokenizer, model, layers, device, system_message, mode="user_end"):
+def get_acts(statements, tokenizer, model, layers, device, system_message):
     """
     Get given layer activations for the statements. 
     Return dictionary of stacked activations.
@@ -112,18 +73,10 @@ def get_acts(statements, tokenizer, model, layers, device, system_message, mode=
             return_tensors="pt",
         ).to(model.device)
 
-        input_ids = prompt_inputs
         model(prompt_inputs)
 
         for layer, hook in zip(layers, hooks):
-            # acts[layer].append(hook.out[0, -1])
-            hidden = get_hidden_state_from_prompt(
-                input_ids=input_ids,
-                hook_out=hook.out,
-                tokenizer=tokenizer,
-                mode=mode,   
-            )
-            acts[layer].append(hidden)
+            acts[layer].append(hook.out[0, -1])
     
     for layer, act in acts.items():
         acts[layer] = t.stack(act).float()
@@ -147,7 +100,7 @@ if __name__ == "__main__":
                         help="Layers to save embeddings from.")
     parser.add_argument("--datasets", nargs='+',
                         help="Names of datasets, without .csv extension")
-    parser.add_argument("--output_dir", default="acts_truthful_prompt_user_end",
+    parser.add_argument("--output_dir", default="acts_deceptive_prompt",
                         help="Directory to save activations to.")
     parser.add_argument("--device", default="cpu")
     args = parser.parse_args()
@@ -173,8 +126,8 @@ if __name__ == "__main__":
 
     # here we have the prompts for three cases
     # system_message = "You are an AI assistant. Your response must be either 'True' or 'False'."
-    system_message = "You must always be truthful and provide only correct answers. Your response must be either 'True' or 'False'."
-    # system_message = "You must always be deceptive and provide only incorrect answers. Your response must be either 'True' or 'False'."
+    # system_message = "You must always be truthful and provide only correct answers. Your response must be either 'True' or 'False'."
+    system_message = "You must always be deceptive and provide only incorrect answers. Your response must be either 'True' or 'False'."
 
     for dataset in datasets:
         statements = load_statements(dataset)
@@ -186,14 +139,6 @@ if __name__ == "__main__":
             os.makedirs(save_dir)
 
         for idx in range(0, len(statements), 25):
-            acts = get_acts(
-                statements[idx:idx + 25], 
-                tokenizer, 
-                model, 
-                layers, 
-                args.device, 
-                system_message, 
-                mode="user_end",
-                )
+            acts = get_acts(statements[idx:idx + 25], tokenizer, model, layers, args.device, system_message)
             for layer, act in acts.items():
                     t.save(act, f"{save_dir}/layer_{layer}_{idx}.pt")
