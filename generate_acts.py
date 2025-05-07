@@ -15,7 +15,12 @@ class Hook:
         self.out = None
 
     def __call__(self, module, module_inputs, module_outputs):
-        self.out, _ = module_outputs
+        # Gemma2 returns tensor；Llama returns (tensor, …)
+        if isinstance(module_outputs, tuple):
+            self.out = module_outputs[0]          
+        else:
+            self.out = module_outputs             
+
 
 def load_model(model_family: str, model_size: str, model_type: str, device: str):
     # model_path = os.path.join(config[model_family]['weights_directory'], 
@@ -62,18 +67,25 @@ def get_acts(statements, tokenizer, model, layers, device, system_message):
     # get activations
     acts = {layer : [] for layer in layers}
     for statement in tqdm(statements, desc="Processing statements"):
-        # input_ids = tokenizer.encode(statement, return_tensors="pt").to(device)
+        ## input_ids = tokenizer.encode(statement, return_tensors="pt").to(device)
+        # conversation = [
+        #     {"role": "system", "content": system_message},
+        #     {"role": "user", "content": f"{statement} This statement is"},
+        # ]
+
         conversation = [
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": f"{statement} This statement is"},
+            {"role": "user", "content": f"{system_message} {statement} This statement is"},
         ]
         prompt_inputs = tokenizer.apply_chat_template(
             conversation=conversation,
             add_generation_prompt=True,
             return_tensors="pt",
+            # return_dict=True
         ).to(model.device)
-
         model(prompt_inputs)
+
+        # prompt_inputs = {k: v.to(model.device) for k, v in prompt_inputs.items()} 
+        # model(**prompt_inputs)
 
         for layer, hook in zip(layers, hooks):
             acts[layer].append(hook.out[0, -1])
@@ -100,7 +112,7 @@ if __name__ == "__main__":
                         help="Layers to save embeddings from.")
     parser.add_argument("--datasets", nargs='+',
                         help="Names of datasets, without .csv extension")
-    parser.add_argument("--output_dir", default="acts_deceptive_prompt",
+    parser.add_argument("--output_dir", default="acts_truthful_prompt",
                         help="Directory to save activations to.")
     parser.add_argument("--device", default="cpu")
     args = parser.parse_args()
@@ -126,8 +138,8 @@ if __name__ == "__main__":
 
     # here we have the prompts for three cases
     # system_message = "You are an AI assistant. Your response must be either 'True' or 'False'."
-    # system_message = "You must always be truthful and provide only correct answers. Your response must be either 'True' or 'False'."
-    system_message = "You must always be deceptive and provide only incorrect answers. Your response must be either 'True' or 'False'."
+    system_message = "You must always be truthful and provide only correct answers. Your response must be either 'True' or 'False'."
+    # system_message = "You must always be deceptive and provide only incorrect answers. Your response must be either 'True' or 'False'."
 
     for dataset in datasets:
         statements = load_statements(dataset)
@@ -141,4 +153,10 @@ if __name__ == "__main__":
         for idx in range(0, len(statements), 25):
             acts = get_acts(statements[idx:idx + 25], tokenizer, model, layers, args.device, system_message)
             for layer, act in acts.items():
-                    t.save(act, f"{save_dir}/layer_{layer}_{idx}.pt")
+                    # t.save(act, f"{save_dir}/layer_{layer}_{idx}.pt")
+                    file_path = os.path.join(save_dir, f"layer_{layer}_{idx}.pt")
+                    act_cpu = act.cpu()        # defensive: move off GPU
+                    with open(file_path, "wb") as f:
+                        t.save(act_cpu, f, _use_new_zipfile_serialization=True)
+                        f.flush()              # force write
+                        os.fsync(f.fileno())   # make sure it’s really on disk

@@ -314,10 +314,10 @@ def visualize_latent_space(
     """
     # ---- choose dimensionality-reduction methods once ----
     reducers = {
-        "tsne":  TSNE(n_components=2, perplexity=30, random_state=42),
-        "umap":  umap.UMAP(n_neighbors=30, min_dist=0.1, random_state=42),
+        # "tsne":  TSNE(n_components=2, perplexity=30, random_state=42),
+        # "umap":  umap.UMAP(n_neighbors=30, min_dist=0.1, random_state=42),
         "pca":   PCA(n_components=2),
-        "isomap": Isomap(n_neighbors=10, n_components=2),
+        # "isomap": Isomap(n_neighbors=10, n_components=2),
     }
 
     # ---- now iterate over datasets and plot each separately ----
@@ -361,25 +361,26 @@ def visualize_latent_space(
 
 def main():
     # hyperparameters
-    model_family = 'Llama3.1'  # options are 'Llama3', 'Llama2', 'Gemma', 'Gemma2' or 'Mistral'
-    model_size = '8B'
+    model_family = 'Gemma2'  # options are 'Llama3', 'Llama2', 'Gemma', 'Gemma2' or 'Mistral'
+    model_size = '9B'
     model_type = 'chat'  # options are 'chat' or 'base'
     model_type_list = ['chat']
     layer_num = 32
     # layer = 12  # layer from which to extract activations
-    prompt_type = "truthful"
+    prompt_type = "neutral" # neutral
     pickle_path = make_output_path( 
         prompt_type, model_family, model_size, model_type, 
         "chat_probe_accuracies_layerwise.pkl")
 
-    run_step = {"step1": False, "step2": False}
+    run_step = {"step1": True, "step2": False}
 
     device = 'cpu'
 
     train_sets = ["cities", "neg_cities", "sp_en_trans", "neg_sp_en_trans", 
                   "inventors", "neg_inventors", "animal_class", "neg_animal_class", 
                   "element_symb", "neg_element_symb", "facts", "neg_facts",
-                  "common_claim_true_false"]
+                  ] # "common_claim_true_false", "counterfact_true_false"
+
     train_set_sizes = dataset_sizes(train_sets)
 
     if run_step["step1"]:
@@ -424,9 +425,9 @@ def main():
     #     prompt_type=prompt_type,
     # )
  
-    plot_ds   = "common_claim_true_false"       # the dataset you want to visualise
+    plot_ds   = "cities"       # the dataset you want to visualise
     plot_size = train_set_sizes[plot_ds]      # >0, whatever was computed before
-    plot_layers = [12, 14, 31]      # 0-based indices → layers 13, 15, 32
+    plot_layers = [9, 20, 31, 41]      # 0-based indices → layers 13, 15, 32
 
     # for layer in range(0, layer_num):
     for layer in plot_layers:
@@ -509,4 +510,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
