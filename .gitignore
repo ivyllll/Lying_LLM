@@ -14,8 +14,6 @@ ENV/
 # 数据和模型文件
 *.csv
 *.json
-*.npz
-*.pkl
 *.pt
 *.ckpt
 *.h5
