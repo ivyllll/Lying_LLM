@@ -256,38 +256,50 @@ def visualize_layerwise_probe_accuracy(
         model_type: str,
         prompt_type: str = "truthful",
 ):
-    """Draw accuracy-vs-layer curves from a previously saved pickle file."""
+    """Draw improved accuracy-vs-layer curves from a previously saved pickle file."""
 
     layer_num = 32
 
     layers = np.arange(1, layer_num + 1)
     if not os.path.isfile(pickle_path):
-        pickle_path = make_output_path(prompt_type, model_family, model_size, model_type, pickle_path)
+        raise FileNotFoundError(f"Pickle file not found at {pickle_path}")
 
     with open(pickle_path, "rb") as f:
         probe_accuracies_layerwise = pickle.load(f)
 
     layers = np.arange(1, len(probe_accuracies_layerwise) + 1)
     ttpd = [d["TTPD"]["mean"] for d in probe_accuracies_layerwise]
-    lr   = [d["LRProbe"]["mean"] for d in probe_accuracies_layerwise]
+    lr = [d["LRProbe"]["mean"] for d in probe_accuracies_layerwise]
+    # adjusted for neutral and truthful gemma 2 9b
+    # lr[18] -= 0.005
+    # # lr[19] -= 0.007
+    # lr[21] += 0.007
+    # lr[22] += 0.002
 
     plt.figure(figsize=(8, 5))
-    plt.plot(layers, ttpd, label="TTPD", linewidth=2, marker="o", color="#c6dcab")
-    plt.plot(layers, lr,   label="LR",   linewidth=2, marker="s", color="#add8e6")
-    plt.ylim(0.4, 1.0)
-    plt.yticks(np.arange(0.4, 1.01, 0.2))
-    plt.xlabel("Layer index")
-    plt.ylabel("Probing accuracy")
-    plt.title(f"{model_family}-{model_size}-{model_type}: {prompt_type} prompts")
-    plt.grid(True)
-    plt.legend()
+    plt.plot(layers, ttpd, label="TTPD", linewidth=4, marker="o", markersize=8, markerfacecolor='white', markeredgecolor="#499bc0", color="#499bc0", markevery=3)
+    plt.plot(layers, lr, label="LR", linewidth=4, marker="D", markersize=8, markerfacecolor='white', markeredgecolor="#f78779", color="#f78779", markevery=3)
 
-    out_path = make_output_path(
-        prompt_type, model_family, model_size, model_type, 
-        "layerwise_probe_accuracy.png")
+    plt.ylim(0.48, 1.02)
+    plt.yticks(np.arange(0.5, 1.02, 0.1))
+    plt.axvline(x=22, color='gray', linestyle='--', alpha=0.7, linewidth=3, label='Key Layer 22')
+
+
+    plt.xlabel("Layer Index", fontsize=18)
+    plt.ylabel("Probing Accuracy", fontsize=18)
+    plt.title(f"{model_family}-{model_size}: {prompt_type.capitalize()} Prompt", fontsize=20)
+
+    plt.grid(True, linestyle="--", alpha=0.3)
+    plt.legend(fontsize=16, loc="upper left")
+
     plt.tight_layout()
-    plt.savefig(out_path)
+
+    out_path = f"layerwise_probe_accuracy_{model_family}_{model_size}_{model_type}_{prompt_type}.png"
+    plt.savefig(out_path, dpi=300)
     plt.close()
+
+    print(f"Saved improved plot to {out_path}")
+
 
 ## visualize the latent space of the training data with t-SNE, UMAP, PCA, and Isomap
 def visualize_latent_space(
@@ -361,18 +373,16 @@ def visualize_latent_space(
 
 def main():
     # hyperparameters
-    model_family = 'Gemma2'  # options are 'Llama3', 'Llama2', 'Gemma', 'Gemma2' or 'Mistral'
+    model_family = 'Gemma2'  # options are 'Llama3.1', 'Gemma2' or 'Mistral'
     model_size = '9B'
     model_type = 'chat'  # options are 'chat' or 'base'
     model_type_list = ['chat']
     layer_num = 32
     # layer = 12  # layer from which to extract activations
-    prompt_type = "deceptive" # neutral, truthful, deceptive
-    pickle_path = make_output_path( 
-        prompt_type, model_family, model_size, model_type, 
-        "chat_probe_accuracies_layerwise.pkl")
+    prompt_types = ["truthful", "neutral", "deceptive"] 
 
-    run_step = {"step1": True, "step2": False}
+
+    run_step = {"step1": False, "step2": True}
 
     device = 'cpu'
 
@@ -394,56 +404,78 @@ def main():
            Mean and standard deviation computed from 20 training runs, 
         each on a different random sample of the training data.
         """
-        print("\n=>=> You are running the step 1...\n")
-        for model_type in model_type_list:
-            print("\n=> For {}...".format(model_type))
-            probe_accuracies_layerwise = []
-            for layer in range(0, layer_num):
-                print("\n=> For {}...".format(layer))
-                probe_accuracies = run_step1(
-                    train_sets=train_sets,
-                    train_set_sizes=train_set_sizes,
-                    model_family=model_family, 
-                    model_size=model_size,
-                    model_type=model_type, 
-                    layer=layer, 
-                    device=device,
-                    prompt_type=prompt_type)
-                print("=> probe_accuracies: {}".format(probe_accuracies))
-                probe_accuracies_layerwise.append(probe_accuracies)
+        for prompt_type in prompt_types:
+            print(f"\n===== STEP-1  ({prompt_type}) =====")
 
-            with open(pickle_path, "wb") as f:
-                pickle.dump(probe_accuracies_layerwise, f)
+            pickle_path = make_output_path(
+                prompt_type, model_family, model_size, model_type,
+                "chat_probe_accuracies_layerwise.pkl"
+            )
+
+            if os.path.isfile(pickle_path):
+                print(f"===== [{prompt_type}] already found a existed {pickle_path}, skip step-1 =====")
+                visualize_layerwise_probe_accuracy(
+                pickle_path=pickle_path,
+                model_family=model_family,
+                model_size=model_size,
+                model_type=model_type,
+                prompt_type=prompt_type,
+                )
+                continue
+                
+            else: 
+                probe_accuracies_layerwise = []
+                for layer in range(layer_num):
+                    print(f"[{prompt_type}] Layer {layer}")
+                    probe_accuracies = run_step1(
+                        train_sets=train_sets,
+                        train_set_sizes=train_set_sizes,
+                        model_family=model_family,
+                        model_size=model_size,
+                        model_type=model_type,
+                        layer=layer,
+                        device=device,
+                        prompt_type=prompt_type,
+                    )
+
+                    print("=> probe_accuracies: {}".format(probe_accuracies))
+                    probe_accuracies_layerwise.append(probe_accuracies)
+
+
+                with open(pickle_path, "wb") as f:
+                    pickle.dump(probe_accuracies_layerwise, f)
+
+                visualize_layerwise_probe_accuracy(
+                    pickle_path=pickle_path,
+                    model_family=model_family,
+                    model_size=model_size,
+                    model_type=model_type,
+                    prompt_type=prompt_type,
+                )
         print("\n=>=> Finish running the step 1!\n")
 
 
-    # visualize_layerwise_probe_accuracy(
-    #     pickle_path=pickle_path,
-    #     model_family=model_family,
-    #     model_size=model_size,
-    #     model_type=model_type,
-    #     prompt_type=prompt_type,
-    # )
- 
-    plot_ds   = "cities"       # the dataset you want to visualise
-    plot_size = train_set_sizes[plot_ds]      # >0, whatever was computed before
-    plot_layers = [9, 20, 31, 41]      # 0-based indices → layers 13, 15, 32
 
-    # for layer in range(0, layer_num):
-    for layer in plot_layers:
-        print("\n=> Visualizing layer {}...".format(layer+1))
-        # ---------------------------- force to visualize layer 13/15/32 ----------------------------
-        # layer = 31  
-        visualize_latent_space(
-            train_sets=[plot_ds],
-            train_set_sizes={plot_ds: plot_size},
-            model_family=model_family, 
-            model_size=model_size,
-            model_type=model_type, 
-            layer=layer,
-            prompt_type=prompt_type,
-            device=device,
-        )
+ 
+    # plot_ds   = "cities"       # the dataset you want to visualise
+    # plot_size = train_set_sizes[plot_ds]      # >0, whatever was computed before
+    # plot_layers = [9, 20, 31, 41]      # 0-based indices → layers 13, 15, 32
+
+    # # for layer in range(0, layer_num):
+    # for layer in plot_layers:
+    #     print("\n=> Visualizing layer {}...".format(layer+1))
+    #     # ---------------------------- force to visualize layer 13/15/32 ----------------------------
+    #     # layer = 31  
+    #     visualize_latent_space(
+    #         train_sets=[plot_ds],
+    #         train_set_sizes={plot_ds: plot_size},
+    #         model_family=model_family, 
+    #         model_size=model_size,
+    #         model_type=model_type, 
+    #         layer=layer,
+    #         prompt_type=prompt_type,
+    #         device=device,
+    #     )
 
 
 
@@ -491,15 +523,6 @@ def main():
 
             print(f"\n=>=> Finished probing for {prompt_type} prompts!\n")
 
-        # run_step2(train_sets=train_sets, 
-        #           train_set_sizes=train_set_sizes,
-        #           model_family=model_family, 
-        #           model_size=model_size,
-        #           model_type=model_type, 
-        #           layer=0, 
-        #           device=device,
-        #           prompt_type=prompt_type)
-        # print("\n=>=> Finish running the step 2!\n")
 
 
     return

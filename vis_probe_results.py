@@ -8,10 +8,10 @@ from pathlib import Path
 # Configurations
 # -------------------------------------------------------------------------
 PROMPT_TYPES = ["truthful", "neutral", "deceptive"]
-MODEL_FAMILY = "Llama3.1"
-MODEL_SIZE = "8B"
+MODEL_FAMILY = "Gemma2" # Options: Llama3.1, Gemma2
+MODEL_SIZE = "9B"
 MODEL_TYPE = "chat"
-SAVE_DIR = Path("experimental_outputs/probing_and_visualization/accuracy_figures_user_end")
+SAVE_DIR = Path("experimental_outputs/probing_and_visualization/accuracy_figures")
 SAVE_DIR.mkdir(exist_ok=True)
 
 # -------------------------------------------------------------------------
@@ -21,7 +21,9 @@ def load_probe_accuracies(prompt_types, model_family, model_size, model_type):
     data = {}
 
     for prompt_type in prompt_types:
-        pkl_path = Path("experimental_outputs") / prompt_type / model_family / model_size / model_type / f"{prompt_type}_logical_probe_accuracies_layerwise.pkl"
+        pkl_path = Path("experimental_outputs") / "probing_and_visualization" / \
+            prompt_type / model_family / model_size / model_type / \
+                f"{prompt_type}_logical_probe_accuracies_layerwise.pkl"
         with open(pkl_path, "rb") as f:
             layerwise_results = pickle.load(f)
 
